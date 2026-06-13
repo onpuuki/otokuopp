@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/screens/webview_screen.dart';
 import 'package:dart_geohash/dart_geohash.dart';
+import 'package:http/http.dart' as http;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,6 +15,41 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLocationFilterEnabled = false;
   final GeoHasher _geoHasher = GeoHasher();
+
+  static const String scraperUrl = 'YOUR_CLOUD_FUNCTION_URL';
+
+  Future<void> _triggerScraping() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Scraping started...')),
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse(scraperUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'urls': []}), // Default empty array to trigger fallback URLs
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final count = data['count'] ?? 0;
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Scraping completed! Found $count campaigns.')),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Scraping failed: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
 
   // Test coordinates from requirements: latitude 35.6247, longitude 139.4244
   // Note that GeoHasher.encode parameters are (longitude, latitude)
@@ -50,6 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'デバッグ: スクレイピング実行',
+            onPressed: _triggerScraping,
           ),
           const SizedBox(width: 16),
         ],

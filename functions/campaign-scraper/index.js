@@ -127,25 +127,53 @@ async function saveCampaignsToFirestore(campaigns) {
  * Cloud Function Entry Point
  */
 functions.http('scrapeCampaign', async (req, res) => {
-  const url = req.query.url || req.body.url;
+  let urls = req.body.urls;
 
-  if (!url) {
-    return res.status(400).send('Please provide a URL to scrape via "url" query parameter or JSON body.');
+  // Fallback to query param if single url is provided for backward compatibility
+  if (!urls && req.query.url) {
+    urls = [req.query.url];
+  } else if (!urls && req.body.url) {
+    urls = [req.body.url];
+  }
+
+  // Default fallback URLs if nothing is provided
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    urls = [
+      'https://example.com/campaigns',
+      'https://example.com/sales'
+    ];
   }
 
   try {
-    const text = await fetchAndExtractText(url);
     const apiKey = process.env.GEMINI_API_KEY;
-    const campaigns = await extractCampaignData(text, apiKey);
+    let totalCampaigns = 0;
+    let allCampaigns = [];
 
-    if (campaigns && campaigns.length > 0) {
-      await saveCampaignsToFirestore(campaigns);
-      res.status(200).send({ message: 'Successfully scraped and saved campaigns', count: campaigns.length, campaigns });
+    for (const url of urls) {
+      console.log(`Scraping URL: ${url}`);
+      try {
+        const text = await fetchAndExtractText(url);
+        const campaigns = await extractCampaignData(text, apiKey);
+
+        if (campaigns && campaigns.length > 0) {
+          await saveCampaignsToFirestore(campaigns);
+          totalCampaigns += campaigns.length;
+          allCampaigns.push(...campaigns);
+        }
+      } catch (err) {
+        console.error(`Error processing url ${url}:`, err);
+        // Continue to the next URL even if one fails
+      }
+    }
+
+    if (totalCampaigns > 0) {
+      res.status(200).send({ message: 'Successfully scraped and saved campaigns', count: totalCampaigns, campaigns: allCampaigns });
     } else {
-      res.status(200).send({ message: 'No campaigns found in the provided URL.', count: 0 });
+      res.status(200).send({ message: 'No campaigns found in the provided URLs.', count: 0 });
     }
 
   } catch (error) {
+    console.error('Fatal error in scrapeCampaign:', error);
     res.status(500).send({ error: error.message });
   }
 });
