@@ -1,0 +1,29 @@
+{
+  "description": "Geohashを用いた位置情報検索用モックデータ。多摩市周辺の特売情報等のダミーデータです。",
+  "campaigns": [
+    {
+      "id": "mock-campaign-001",
+      "title": "多摩市周辺のスーパーの特売",
+      "storeName": "スーパーダミー 多摩店",
+      "location": {
+        "latitude": 35.6369,
+        "longitude": 139.4463
+      },
+      "geohash": "xn74s83x",
+      "details": "全品10%オフ！野菜詰め放題！",
+      "expiresAt": "2024-12-31T23:59:59Z"
+    },
+    {
+      "id": "mock-campaign-002",
+      "title": "多摩センター駅前のPayPay20%還元",
+      "storeName": "ダミーカフェ 多摩センター駅前店",
+      "location": {
+        "latitude": 35.6247,
+        "longitude": 139.4244
+      },
+      "geohash": "xn74e5v9",
+      "details": "PayPayでのお支払いで最大20%還元！",
+      "expiresAt": "2024-11-30T23:59:59Z"
+    }
+  ]
+}
