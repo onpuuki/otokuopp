@@ -6,7 +6,8 @@ import 'package:dart_geohash/dart_geohash.dart';
 import 'package:http/http.dart' as http;
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final FirebaseFirestore? firestore;
+  const HomeScreen({super.key, this.firestore});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -54,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Test coordinates from requirements: latitude 35.6247, longitude 139.4244
   // Note that GeoHasher.encode parameters are (longitude, latitude)
   Stream<QuerySnapshot> _getCampaignsStream() {
-    var collection = FirebaseFirestore.instance.collection('campaigns');
+    var collection = (widget.firestore ?? FirebaseFirestore.instance).collection('campaigns');
 
     if (_isLocationFilterEnabled) {
       // Encode coordinates with a precision of 5 (adjust length as needed)
