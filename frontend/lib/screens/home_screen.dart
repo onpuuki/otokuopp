@@ -1,9 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/screens/webview_screen.dart';
+import 'package:dart_geohash/dart_geohash.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isLocationFilterEnabled = false;
+  final GeoHasher _geoHasher = GeoHasher();
+
+  // Test coordinates from requirements: latitude 35.6247, longitude 139.4244
+  // Note that GeoHasher.encode parameters are (longitude, latitude)
+  Stream<QuerySnapshot> _getCampaignsStream() {
+    var collection = FirebaseFirestore.instance.collection('campaigns');
+
+    if (_isLocationFilterEnabled) {
+      // Encode coordinates with a precision of 5 (adjust length as needed)
+      String prefix = _geoHasher.encode(139.4244, 35.6247, precision: 5);
+      return collection
+          .where('geohash', isGreaterThanOrEqualTo: prefix)
+          .where('geohash', isLessThan: prefix + '\uf8ff')
+          .snapshots();
+    }
+
+    return collection.snapshots();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,9 +37,25 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Campaigns'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          Row(
+            children: [
+              const Text('現在地周辺のみ表示'),
+              Switch(
+                value: _isLocationFilterEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _isLocationFilterEnabled = value;
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('campaigns').snapshots(),
+        stream: _getCampaignsStream(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(child: Text('Something went wrong'));
