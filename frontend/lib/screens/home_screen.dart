@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:frontend/screens/webview_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -37,31 +38,42 @@ class HomeScreen extends StatelessWidget {
               final title = campaign['title'] as String? ?? 'No Title';
               final storeName = campaign['storeName'] as String? ?? 'No Store Name';
               final details = campaign['details'] as String? ?? 'No Details';
+              final url = campaign['url'] as String? ?? 'https://google.com';
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewScreen(url: url),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        storeName,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[700],
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        details,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        Text(
+                          storeName,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          details,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
