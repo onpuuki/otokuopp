@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/screens/webview_screen.dart';
 import 'package:dart_geohash/dart_geohash.dart';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'url_manager_dialog.dart';
 import 'debug_log_screen.dart';
@@ -37,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'urls': [],
           'isManual': true,
         }), // Default empty array and manual flag
-      );
+      ).timeout(const Duration(seconds: 45));
 
       DebugLogManager.addLog('Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
 
@@ -54,6 +55,12 @@ class _HomeScreenState extends State<HomeScreen> {
           SnackBar(content: Text('Scraping failed: ${response.statusCode}')),
         );
       }
+    } on TimeoutException catch (e) {
+      DebugLogManager.addLog('Scraping timeout: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('通信がタイムアウトしました。もう一度お試しください。')),
+      );
     } catch (e) {
       DebugLogManager.addLog('Scraping error: $e');
       if (!mounted) return;

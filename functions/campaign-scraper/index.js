@@ -14,7 +14,7 @@ if (!admin.apps.length) {
  */
 async function fetchAndExtractText(url) {
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) {
       throw new Error(`Failed to fetch URL: ${response.statusText}`);
     }
@@ -74,7 +74,9 @@ ${text}
 `;
 
   try {
+    console.log(`[extractCampaignData] Calling Gemini API...`);
     const result = await model.generateContent(prompt);
+    console.log(`[extractCampaignData] Gemini API call completed.`);
     const responseText = result.response.text();
     console.log(`[extractCampaignData] Raw Gemini response:`, responseText);
 
