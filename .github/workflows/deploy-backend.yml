@@ -36,6 +36,7 @@ jobs:
           source_dir: functions/campaign-scraper
           entry_point: scrapeCampaign
           env_vars: GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          environment: 'gen2'
 
       - name: Make Cloud Function Public
         run: |
