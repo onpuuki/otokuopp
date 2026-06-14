@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/screens/webview_screen.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:http/http.dart' as http;
+import 'url_manager_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   final FirebaseFirestore? firestore;
@@ -138,6 +139,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     );
                   },
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('情報取得先URL'),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const UrlManagerDialog(),
                 );
               },
             ),
