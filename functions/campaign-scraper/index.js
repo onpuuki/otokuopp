@@ -127,21 +127,21 @@ async function saveCampaignsToFirestore(campaigns) {
  * Cloud Function Entry Point
  */
 functions.http('scrapeCampaign', async (req, res) => {
-  let urls = req.body.urls;
+  const db = admin.firestore();
+  let urls = [];
 
-  // Fallback to query param if single url is provided for backward compatibility
-  if (!urls && req.query.url) {
-    urls = [req.query.url];
-  } else if (!urls && req.body.url) {
-    urls = [req.body.url];
+  try {
+    const configDoc = await db.collection('settings').doc('config').get();
+    if (configDoc.exists) {
+      urls = configDoc.data().targetUrls || [];
+    }
+  } catch (error) {
+    console.error('Error fetching targetUrls from Firestore:', error);
+    return res.status(500).send({ error: 'Failed to fetch configuration' });
   }
 
-  // Default fallback URLs if nothing is provided
-  if (!urls || !Array.isArray(urls) || urls.length === 0) {
-    urls = [
-      'https://example.com/campaigns',
-      'https://example.com/sales'
-    ];
+  if (!urls || urls.length === 0) {
+    return res.status(200).send({ message: 'No target URLs configured.', count: 0 });
   }
 
   try {

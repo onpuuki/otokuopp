@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/screens/webview_screen.dart';
+import 'package:frontend/screens/url_manager_dialog.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:http/http.dart' as http;
 
@@ -28,7 +29,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final response = await http.post(
         Uri.parse(scraperUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'urls': []}), // Default empty array to trigger fallback URLs
       );
 
       if (response.statusCode == 200) {
@@ -89,13 +89,46 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            tooltip: 'デバッグ: スクレイピング実行',
-            onPressed: _triggerScraping,
-          ),
           const SizedBox(width: 16),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              child: const Text(
+                'デバッグメニュー',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report),
+              title: const Text('手動スクレイピング'),
+              onTap: () {
+                Navigator.pop(context); // Close the drawer
+                _triggerScraping();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('情報取得先URL'),
+              onTap: () {
+                Navigator.pop(context); // Close the drawer
+                showDialog(
+                  context: context,
+                  builder: (context) => UrlManagerDialog(firestore: widget.firestore),
+                );
+              },
+            ),
+          ],
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _getCampaignsStream(),
