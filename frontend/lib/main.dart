@@ -1,14 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/home_screen.dart';
+import 'firebase_options.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp();
-    runApp(const MyApp());
-  } catch (e) {
-    runApp(ErrorApp(error: e.toString()));
+  runApp(const AppInitializer());
+}
+
+class AppInitializer extends StatelessWidget {
+  const AppInitializer({super.key});
+
+  Future<FirebaseApp> _initializeFirebase() async {
+    try {
+      return await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e) {
+      debugPrint('Firebase Initialize Error: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<FirebaseApp>(
+      future: _initializeFirebase(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return ErrorApp(error: snapshot.error.toString());
+        }
+
+        return const MyApp();
+      },
+    );
   }
 }
 
