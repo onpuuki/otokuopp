@@ -12,9 +12,11 @@ if (!admin.apps.length) {
 /**
  * 1. Webページの取得: 任意のURLからHTMLを取得し、cheerio等の軽量ライブラリを用いてプレーンテキストを抽出する関数。
  */
-async function fetchAndExtractText(url) {
+async function fetchAndExtractText(url, logs = []) {
   try {
+    logs.push(`[fetchAndExtractText] Fetching URL: ${url}`);
     const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    logs.push(`[fetchAndExtractText] Response status: ${response.status}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch URL: ${response.statusText}`);
     }
@@ -27,9 +29,11 @@ async function fetchAndExtractText(url) {
     // Extract text
     const text = $('body').text().replace(/\s+/g, ' ').trim();
     console.log(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
+    logs.push(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
     return text;
   } catch (error) {
     console.error('Error fetching and extracting text:', error);
+    logs.push(`[fetchAndExtractText] Error: ${error.message}`);
     throw error;
   }
 }
@@ -38,7 +42,7 @@ async function fetchAndExtractText(url) {
  * 2. Gemini API連携: 抽出したテキストをGemini API（gemini-2.5-flash）に渡し、
  * Phase 1で作成した `mock-data.json` のスキーマに完全に一致するJSON構造化データとして出力させる関数。
  */
-async function extractCampaignData(text, apiKey) {
+async function extractCampaignData(text, apiKey, logs = []) {
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is missing.');
   }
@@ -75,8 +79,10 @@ ${text}
 
   try {
     console.log(`[extractCampaignData] Calling Gemini API...`);
+    logs.push(`[extractCampaignData] Calling Gemini API...`);
     const result = await model.generateContent(prompt);
     console.log(`[extractCampaignData] Gemini API call completed.`);
+    logs.push(`[extractCampaignData] Gemini API call completed.`);
     const responseText = result.response.text();
     console.log(`[extractCampaignData] Raw Gemini response:`, responseText);
 
@@ -89,9 +95,11 @@ ${text}
     }
 
     const data = JSON.parse(jsonString);
+    logs.push(`[extractCampaignData] Successfully parsed JSON. Extracted ${(data.campaigns || []).length} campaigns.`);
     return data.campaigns || [];
   } catch (error) {
     console.error('Error extracting campaign data from Gemini:', error);
+    logs.push(`[extractCampaignData] Error: ${error.message}`);
     throw error;
   }
 }
@@ -131,6 +139,7 @@ async function saveCampaignsToFirestore(campaigns) {
  * Cloud Function Entry Point
  */
 functions.http('scrapeCampaign', async (req, res) => {
+  let executionLogs = [];
   try {
     const isManual = req.body && req.body.isManual === true;
     if (!isManual) {
@@ -139,12 +148,14 @@ functions.http('scrapeCampaign', async (req, res) => {
         const isAutoScrapingEnabled = configDoc.data().isAutoScrapingEnabled;
         if (isAutoScrapingEnabled === false) {
           console.log("Auto-scraping is disabled.");
-          return res.status(200).send({ message: 'Auto-scraping is disabled.', count: 0 });
+          executionLogs.push("Auto-scraping is disabled.");
+          return res.status(200).send({ message: 'Auto-scraping is disabled.', count: 0, executionLogs });
         }
       }
     }
   } catch (error) {
     console.error("Error reading auto-scraping config:", error);
+    executionLogs.push(`Error reading auto-scraping config: ${error.message}`);
     // Continue scraping if reading config fails to be safe
   }
 
@@ -161,25 +172,31 @@ functions.http('scrapeCampaign', async (req, res) => {
   if (!urls || !Array.isArray(urls) || urls.length === 0) {
     try {
       console.log("No URLs provided in request, attempting to fetch targetUrls from Firestore settings/config...");
+      executionLogs.push("No URLs provided in request, attempting to fetch targetUrls from Firestore settings/config...");
       const configDoc = await admin.firestore().collection('settings').doc('config').get();
       if (configDoc.exists) {
         const targetUrls = configDoc.data().targetUrls;
         if (Array.isArray(targetUrls) && targetUrls.length > 0) {
           urls = targetUrls;
           console.log("Successfully fetched targetUrls from Firestore.");
+          executionLogs.push(`Successfully fetched ${urls.length} targetUrls from Firestore: ${urls.join(', ')}`);
         } else {
           console.log("targetUrls field is missing or empty in Firestore settings/config.");
+          executionLogs.push("targetUrls field is missing or empty in Firestore settings/config.");
         }
       } else {
         console.log("Firestore settings/config document does not exist.");
+        executionLogs.push("Firestore settings/config document does not exist.");
       }
     } catch (error) {
       console.error("Error reading targetUrls from config:", error);
+      executionLogs.push(`Error reading targetUrls from config: ${error.message}`);
     }
 
     // Final fallback
     if (!urls || urls.length === 0) {
       console.log("Falling back to default dummy URLs.");
+      executionLogs.push("Falling back to default dummy URLs.");
       urls = [
         'https://example.com/campaigns',
         'https://example.com/sales'
@@ -193,12 +210,13 @@ functions.http('scrapeCampaign', async (req, res) => {
     let allCampaigns = [];
 
     console.log(`[scrapeCampaign] Starting scraping process for ${urls.length} URLs:`, urls);
+    executionLogs.push(`[scrapeCampaign] Starting scraping process for ${urls.length} URLs: ${urls.join(', ')}`);
 
     for (const url of urls) {
       console.log(`Scraping URL: ${url}`);
       try {
-        const text = await fetchAndExtractText(url);
-        const campaigns = await extractCampaignData(text, apiKey);
+        const text = await fetchAndExtractText(url, executionLogs);
+        const campaigns = await extractCampaignData(text, apiKey, executionLogs);
 
         if (campaigns && campaigns.length > 0) {
           await saveCampaignsToFirestore(campaigns);
@@ -207,19 +225,21 @@ functions.http('scrapeCampaign', async (req, res) => {
         }
       } catch (err) {
         console.error(`Error processing url ${url}:`, err);
+        executionLogs.push(`Error processing url ${url}: ${err.message}`);
         // Continue to the next URL even if one fails
       }
     }
 
     if (totalCampaigns > 0) {
-      res.status(200).send({ message: 'Successfully scraped and saved campaigns', count: totalCampaigns, campaigns: allCampaigns });
+      res.status(200).send({ message: 'Successfully scraped and saved campaigns', count: totalCampaigns, campaigns: allCampaigns, executionLogs });
     } else {
-      res.status(200).send({ message: 'No campaigns found in the provided URLs.', count: 0 });
+      res.status(200).send({ message: 'No campaigns found in the provided URLs.', count: 0, executionLogs });
     }
 
   } catch (error) {
     console.error('Fatal error in scrapeCampaign:', error);
-    res.status(500).send({ error: error.message });
+    executionLogs.push(`Fatal error in scrapeCampaign: ${error.message}`);
+    res.status(500).send({ error: error.message, executionLogs });
   }
 });
 

@@ -1,0 +1,8 @@
+feat: Include execution logs in scraper backend response and output to frontend UI
+
+- Modified backend scrapeCampaign to track detailed executionLogs.
+- Pass executionLogs down to fetchAndExtractText and extractCampaignData.
+- Return executionLogs array with both 200 and 500 response statuses.
+- Modified frontend home_screen triggerScraping to safely parse and log executionLogs using DebugLogManager.
+- Preserved existing logic, auto scrape switches, URL fallbacks.
+- Widget tests and flutter build pass successfully.
