@@ -51,13 +51,12 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'dummy_android_api_key',
-    appId: 'dummy_android_app_id',
-    messagingSenderId: 'dummy_messaging_sender_id',
-    projectId: 'dummy_project_id',
-    storageBucket: 'dummy_project_id.appspot.com',
+    apiKey: 'AIzaSyBIDJneK8rRgYUPBGGns35QW3gNYPvdZqY',
+    appId: '1:1043959891923:android:8915661b44774449801126',
+    messagingSenderId: '1043959891923',
+    projectId: 'otokuapp',
+    storageBucket: 'otokuapp.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'dummy_ios_api_key',
     appId: 'dummy_ios_app_id',

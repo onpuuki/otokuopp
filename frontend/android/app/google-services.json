@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1043959891923",
+    "project_id": "otokuapp",
+    "storage_bucket": "otokuapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1043959891923:android:8915661b44774449801126",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIDJneK8rRgYUPBGGns35QW3gNYPvdZqY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
