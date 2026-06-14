@@ -17,7 +17,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLocationFilterEnabled = false;
   final GeoHasher _geoHasher = GeoHasher();
 
-  static const String scraperUrl = 'YOUR_CLOUD_FUNCTION_URL';
+  static const String scraperUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/scrapeCampaign';
 
   Future<void> _triggerScraping() async {
     ScaffoldMessenger.of(context).showSnackBar(
