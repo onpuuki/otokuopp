@@ -89,13 +89,83 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            tooltip: 'デバッグ: スクレイピング実行',
-            onPressed: _triggerScraping,
-          ),
           const SizedBox(width: 16),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.deepPurple,
+              ),
+              child: Text(
+                'デバッグメニュー',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report),
+              title: const Text('手動スクレイピング'),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext dialogContext) {
+                    return AlertDialog(
+                      title: const Text('確認'),
+                      content: const Text('本当に実行しますか？'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext); // Cancel
+                          },
+                          child: const Text('キャンセル'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext); // Close dialog
+                            _triggerScraping();
+                          },
+                          child: const Text('実行'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+            StreamBuilder<DocumentSnapshot>(
+              stream: (widget.firestore ?? FirebaseFirestore.instance)
+                  .collection('settings')
+                  .doc('config')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                bool isAutoScrapingEnabled = true; // default value
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>?;
+                  if (data != null && data.containsKey('isAutoScrapingEnabled')) {
+                    isAutoScrapingEnabled = data['isAutoScrapingEnabled'] as bool;
+                  }
+                }
+                return SwitchListTile(
+                  secondary: const Icon(Icons.autorenew),
+                  title: const Text('自動スクレイピング'),
+                  value: isAutoScrapingEnabled,
+                  onChanged: (bool value) {
+                    (widget.firestore ?? FirebaseFirestore.instance)
+                        .collection('settings')
+                        .doc('config')
+                        .set({'isAutoScrapingEnabled': value}, SetOptions(merge: true));
+                  },
+                );
+              },
+            ),
+          ],
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _getCampaignsStream(),
