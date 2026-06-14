@@ -127,6 +127,20 @@ async function saveCampaignsToFirestore(campaigns) {
  * Cloud Function Entry Point
  */
 functions.http('scrapeCampaign', async (req, res) => {
+  try {
+    const configDoc = await admin.firestore().collection('settings').doc('config').get();
+    if (configDoc.exists) {
+      const isAutoScrapingEnabled = configDoc.data().isAutoScrapingEnabled;
+      if (isAutoScrapingEnabled === false) {
+        console.log("Auto-scraping is disabled.");
+        return res.status(200).send({ message: 'Auto-scraping is disabled.', count: 0 });
+      }
+    }
+  } catch (error) {
+    console.error("Error reading auto-scraping config:", error);
+    // Continue scraping if reading config fails to be safe
+  }
+
   let urls = req.body.urls;
 
   // Fallback to query param if single url is provided for backward compatibility
