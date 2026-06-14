@@ -26,6 +26,7 @@ async function fetchAndExtractText(url) {
 
     // Extract text
     const text = $('body').text().replace(/\s+/g, ' ').trim();
+    console.log(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
     return text;
   } catch (error) {
     console.error('Error fetching and extracting text:', error);
@@ -75,6 +76,7 @@ ${text}
   try {
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
+    console.log(`[extractCampaignData] Raw Gemini response:`, responseText);
 
     // Clean up potential markdown wrapping
     let jsonString = responseText.trim();
@@ -155,16 +157,40 @@ functions.http('scrapeCampaign', async (req, res) => {
 
   // Default fallback URLs if nothing is provided
   if (!urls || !Array.isArray(urls) || urls.length === 0) {
-    urls = [
-      'https://example.com/campaigns',
-      'https://example.com/sales'
-    ];
+    try {
+      console.log("No URLs provided in request, attempting to fetch targetUrls from Firestore settings/config...");
+      const configDoc = await admin.firestore().collection('settings').doc('config').get();
+      if (configDoc.exists) {
+        const targetUrls = configDoc.data().targetUrls;
+        if (Array.isArray(targetUrls) && targetUrls.length > 0) {
+          urls = targetUrls;
+          console.log("Successfully fetched targetUrls from Firestore.");
+        } else {
+          console.log("targetUrls field is missing or empty in Firestore settings/config.");
+        }
+      } else {
+        console.log("Firestore settings/config document does not exist.");
+      }
+    } catch (error) {
+      console.error("Error reading targetUrls from config:", error);
+    }
+
+    // Final fallback
+    if (!urls || urls.length === 0) {
+      console.log("Falling back to default dummy URLs.");
+      urls = [
+        'https://example.com/campaigns',
+        'https://example.com/sales'
+      ];
+    }
   }
 
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     let totalCampaigns = 0;
     let allCampaigns = [];
+
+    console.log(`[scrapeCampaign] Starting scraping process for ${urls.length} URLs:`, urls);
 
     for (const url of urls) {
       console.log(`Scraping URL: ${url}`);
