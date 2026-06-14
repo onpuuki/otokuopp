@@ -5,6 +5,8 @@ import 'package:frontend/screens/webview_screen.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:http/http.dart' as http;
 import 'url_manager_dialog.dart';
+import 'debug_log_screen.dart';
+import '../utils/debug_log_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   final FirebaseFirestore? firestore;
@@ -25,6 +27,8 @@ class _HomeScreenState extends State<HomeScreen> {
       const SnackBar(content: Text('Scraping started...')),
     );
 
+    DebugLogManager.addLog('Scraping started: sending request to $scraperUrl');
+
     try {
       final response = await http.post(
         Uri.parse(scraperUrl),
@@ -34,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
           'isManual': true,
         }), // Default empty array and manual flag
       );
+
+      DebugLogManager.addLog('Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -49,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
+      DebugLogManager.addLog('Scraping error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
@@ -139,6 +146,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     );
                   },
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.list_alt),
+              title: const Text('デバッグログ'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const DebugLogScreen()),
                 );
               },
             ),
