@@ -148,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 showDialog(
                   context: context,
-                  builder: (context) => const UrlManagerDialog(),
+                  builder: (context) => UrlManagerDialog(firestore: widget.firestore),
                 );
               },
             ),
