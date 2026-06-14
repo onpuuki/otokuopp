@@ -44,4 +44,27 @@ void main() {
     expect(find.text('情報取得先URL'), findsWidgets); // One in drawer, one in dialog title
     expect(find.text('https://example.com/test'), findsOneWidget);
   });
+
+  testWidgets('HomeScreen opens DebugLogScreen from drawer', (WidgetTester tester) async {
+    final firestore = FakeFirebaseFirestore();
+
+    await tester.pumpWidget(MaterialApp(
+      home: HomeScreen(firestore: firestore),
+    ));
+
+    await tester.pump(); // wait for streams
+
+    // Open drawer
+    ScaffoldState state = tester.firstState(find.byType(Scaffold));
+    state.openDrawer();
+    await tester.pumpAndSettle();
+
+    // Tap on デバッグログ
+    await tester.tap(find.text('デバッグログ'));
+    await tester.pumpAndSettle(); // wait for navigation
+
+    // Should see DebugLogScreen with 'デバッグログ' in AppBar
+    expect(find.text('デバッグログ'), findsWidgets); // One in drawer, one in app bar
+    expect(find.text('ログはありません'), findsOneWidget); // Empty logs initially
+  });
 }
