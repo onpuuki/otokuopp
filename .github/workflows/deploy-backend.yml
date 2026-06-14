@@ -26,22 +26,14 @@ jobs:
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: Deploy Cloud Function
-        id: deploy
-        uses: google-github-actions/deploy-cloud-functions@v2
-        with:
-          name: scrapeCampaign
-          runtime: nodejs20
-          region: asia-northeast1
-          source_dir: functions/campaign-scraper
-          entry_point: scrapeCampaign
-          env_vars: GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-          environment: 'gen2'
-
-      - name: Make Cloud Function Public
+      - name: Deploy Cloud Function (Gen 2)
         run: |
-          gcloud functions add-iam-policy-binding scrapeCampaign \
-            --region=asia-northeast1 \
-            --member="allUsers" \
-            --role="roles/cloudfunctions.invoker" \
-            --gen2
+          gcloud functions deploy scrapeCampaign \
+            --gen2 \
+            --runtime nodejs20 \
+            --region asia-northeast1 \
+            --source functions/campaign-scraper \
+            --entry-point scrapeCampaign \
+            --trigger-http \
+            --allow-unauthenticated \
+            --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
