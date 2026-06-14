@@ -1,0 +1,46 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/campaign-scraper/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Deploy Cloud Function
+        id: deploy
+        uses: google-github-actions/deploy-cloud-functions@v2
+        with:
+          name: scrapeCampaign
+          runtime: nodejs20
+          region: asia-northeast1
+          source_dir: functions/campaign-scraper
+          entry_point: scrapeCampaign
+          env_vars: GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+
+      - name: Make Cloud Function Public
+        run: |
+          gcloud functions add-iam-policy-binding scrapeCampaign \
+            --region=asia-northeast1 \
+            --member="allUsers" \
+            --role="roles/cloudfunctions.invoker" \
+            --gen2
