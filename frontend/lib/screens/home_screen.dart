@@ -38,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'urls': [],
           'isManual': true,
         }), // Default empty array and manual flag
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(const Duration(seconds: 120));
 
       DebugLogManager.addLog('Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
 
