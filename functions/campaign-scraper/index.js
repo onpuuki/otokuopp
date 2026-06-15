@@ -70,7 +70,7 @@ The output MUST strictly follow this JSON schema for the 'campaigns' array:
         "longitude": 139.4463 // Approximate longitude
       },
       // Do NOT include geohash here, it will be added later
-      "details": "Details about the campaign, discount, etc.",
+      "details": "対象のキャンペーンの種類を判別し、'details' フィールドは以下のルールに従って必ず箇条書き（・）の改行テキストとして出力すること。情報がサイトにない項目は『記載なし』とすること。\\n- ポイント獲得サイトの場合：・貯まるポイント名、・ポイント数 を箇条書き。\\n- 抽選サイトの場合：・当たるもの、・抽選条件、・抽選期間、・当選確率、・当選発表日、・応募条件 を箇条書き。\\n- 上記以外のキャンペーン情報の場合：・対象のサイトや店舗名、・キャンペーンの概要 を箇条書き。",
       "expiresAt": "Expiration date in ISO 8601 format (e.g., '2024-12-31T23:59:59Z'). Try to guess from text, if not set to a future date."
     }
   ]
@@ -243,6 +243,7 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
     const campaigns = await extractCampaignData(text, apiKey, executionLogs);
 
     if (campaigns && campaigns.length > 0) {
+      campaigns.forEach(c => c.url = url);
       await saveCampaignsToFirestore(campaigns);
     }
   } catch (error) {
