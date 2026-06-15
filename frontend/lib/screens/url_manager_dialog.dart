@@ -11,9 +11,25 @@ class UrlManagerDialog extends StatefulWidget {
 
 class _UrlManagerDialogState extends State<UrlManagerDialog> {
   final TextEditingController _urlController = TextEditingController();
+  final TextEditingController _policyController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    (widget.firestore ?? FirebaseFirestore.instance)
+        .collection('settings')
+        .doc('config')
+        .get()
+        .then((doc) {
+      if (doc.exists && doc.data() != null && doc.data()!.containsKey('scrapingPolicy')) {
+        _policyController.text = doc.data()!['scrapingPolicy'] ?? '';
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _policyController.dispose();
     _urlController.dispose();
     super.dispose();
   }
@@ -36,6 +52,13 @@ class _UrlManagerDialogState extends State<UrlManagerDialog> {
         .collection('settings')
         .doc('config')
         .set({'targetUrls': updatedUrls}, SetOptions(merge: true));
+  }
+
+  void _savePolicy() {
+    (widget.firestore ?? FirebaseFirestore.instance)
+        .collection('settings')
+        .doc('config')
+        .set({'scrapingPolicy': _policyController.text}, SetOptions(merge: true));
   }
 
   @override
@@ -122,6 +145,28 @@ class _UrlManagerDialogState extends State<UrlManagerDialog> {
                       onPressed: () => _addUrl(targetUrls),
                     );
                   },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _policyController,
+                    maxLines: null,
+                    decoration: const InputDecoration(
+                      labelText: '調査方針',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.save, color: Colors.green, size: 36),
+                  onPressed: _savePolicy,
                 ),
               ],
             ),
