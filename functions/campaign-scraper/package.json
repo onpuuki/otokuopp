@@ -7,11 +7,12 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "functions-framework --target=scrapeCampaign",
+    "start": "functions-framework --target=startScraping",
     "test": "node test-local.js"
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/pubsub": "^4.3.3",
     "@google/generative-ai": "^0.2.1",
     "cheerio": "^1.0.0-rc.12",
     "firebase-admin": "^11.11.1",

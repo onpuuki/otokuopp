@@ -26,15 +26,32 @@ jobs:
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: Deploy Cloud Function (Gen 2)
+      - name: Create Pub/Sub Topic
         run: |
-          gcloud functions deploy scrapeCampaign \
+          gcloud pubsub topics create scrape-url-topic || true
+
+      - name: Deploy Cloud Function (HTTP Trigger)
+        run: |
+          gcloud functions deploy startScraping \
             --gen2 \
             --runtime nodejs20 \
             --region asia-northeast1 \
             --source functions/campaign-scraper \
-            --entry-point scrapeCampaign \
+            --entry-point startScraping \
             --trigger-http \
+            --allow-unauthenticated \
+            --timeout=120 \
+            --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+
+      - name: Deploy Cloud Function (Pub/Sub Trigger)
+        run: |
+          gcloud functions deploy processUrlTask \
+            --gen2 \
+            --runtime nodejs20 \
+            --region asia-northeast1 \
+            --source functions/campaign-scraper \
+            --entry-point processUrlTask \
+            --trigger-topic=scrape-url-topic \
             --allow-unauthenticated \
             --timeout=120 \
             --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}

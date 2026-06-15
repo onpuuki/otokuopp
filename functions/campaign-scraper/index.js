@@ -3,11 +3,14 @@ const cheerio = require('cheerio');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
 const ngeohash = require('ngeohash');
+const { PubSub } = require('@google-cloud/pubsub');
 
 // Initialize Firebase Admin (only once)
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+
+const pubSubClient = new PubSub();
 
 /**
  * 1. Webページの取得: 任意のURLからHTMLを取得し、cheerio等の軽量ライブラリを用いてプレーンテキストを抽出する関数。
@@ -136,9 +139,9 @@ async function saveCampaignsToFirestore(campaigns) {
 }
 
 /**
- * Cloud Function Entry Point
+ * Cloud Function Entry Point - HTTP Trigger to start scraping job
  */
-functions.http('scrapeCampaign', async (req, res) => {
+functions.http('startScraping', async (req, res) => {
   let executionLogs = [];
   try {
     const isManual = req.body && req.body.isManual === true;
@@ -156,47 +159,33 @@ functions.http('scrapeCampaign', async (req, res) => {
   } catch (error) {
     console.error("Error reading auto-scraping config:", error);
     executionLogs.push(`Error reading auto-scraping config: ${error.message}`);
-    // Continue scraping if reading config fails to be safe
   }
 
   let urls = req.body.urls;
 
-  // Fallback to query param if single url is provided for backward compatibility
   if (!urls && req.query.url) {
     urls = [req.query.url];
   } else if (!urls && req.body.url) {
     urls = [req.body.url];
   }
 
-  // Default fallback URLs if nothing is provided
   if (!urls || !Array.isArray(urls) || urls.length === 0) {
     try {
       console.log("No URLs provided in request, attempting to fetch targetUrls from Firestore settings/config...");
-      executionLogs.push("No URLs provided in request, attempting to fetch targetUrls from Firestore settings/config...");
       const configDoc = await admin.firestore().collection('settings').doc('config').get();
       if (configDoc.exists) {
         const targetUrls = configDoc.data().targetUrls;
         if (Array.isArray(targetUrls) && targetUrls.length > 0) {
           urls = targetUrls;
           console.log("Successfully fetched targetUrls from Firestore.");
-          executionLogs.push(`Successfully fetched ${urls.length} targetUrls from Firestore: ${urls.join(', ')}`);
-        } else {
-          console.log("targetUrls field is missing or empty in Firestore settings/config.");
-          executionLogs.push("targetUrls field is missing or empty in Firestore settings/config.");
         }
-      } else {
-        console.log("Firestore settings/config document does not exist.");
-        executionLogs.push("Firestore settings/config document does not exist.");
       }
     } catch (error) {
       console.error("Error reading targetUrls from config:", error);
-      executionLogs.push(`Error reading targetUrls from config: ${error.message}`);
     }
 
-    // Final fallback
     if (!urls || urls.length === 0) {
       console.log("Falling back to default dummy URLs.");
-      executionLogs.push("Falling back to default dummy URLs.");
       urls = [
         'https://example.com/campaigns',
         'https://example.com/sales'
@@ -205,41 +194,72 @@ functions.http('scrapeCampaign', async (req, res) => {
   }
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    let totalCampaigns = 0;
-    let allCampaigns = [];
+    const db = admin.firestore();
+    const jobRef = await db.collection('scraping_jobs').add({
+      totalUrls: urls.length,
+      completedUrls: 0,
+      status: 'running',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
 
-    console.log(`[scrapeCampaign] Starting scraping process for ${urls.length} URLs:`, urls);
-    executionLogs.push(`[scrapeCampaign] Starting scraping process for ${urls.length} URLs: ${urls.join(', ')}`);
+    const jobId = jobRef.id;
+    const topic = pubSubClient.topic('scrape-url-topic');
 
     for (const url of urls) {
-      console.log(`Scraping URL: ${url}`);
-      try {
-        const text = await fetchAndExtractText(url, executionLogs);
-        const campaigns = await extractCampaignData(text, apiKey, executionLogs);
-
-        if (campaigns && campaigns.length > 0) {
-          await saveCampaignsToFirestore(campaigns);
-          totalCampaigns += campaigns.length;
-          allCampaigns.push(...campaigns);
-        }
-      } catch (err) {
-        console.error(`Error processing url ${url}:`, err);
-        executionLogs.push(`Error processing url ${url}: ${err.message}`);
-        // Continue to the next URL even if one fails
-      }
+      const messageBuffer = Buffer.from(JSON.stringify({ url, jobId }));
+      await topic.publishMessage({ data: messageBuffer });
     }
 
-    if (totalCampaigns > 0) {
-      res.status(200).send({ message: 'Successfully scraped and saved campaigns', count: totalCampaigns, campaigns: allCampaigns, executionLogs });
-    } else {
-      res.status(200).send({ message: 'No campaigns found in the provided URLs.', count: 0, executionLogs });
-    }
+    res.status(200).send({
+      message: 'Scraping job started successfully',
+      jobId: jobId,
+      totalUrls: urls.length,
+      executionLogs
+    });
 
   } catch (error) {
-    console.error('Fatal error in scrapeCampaign:', error);
-    executionLogs.push(`Fatal error in scrapeCampaign: ${error.message}`);
+    console.error('Fatal error in startScraping:', error);
+    executionLogs.push(`Fatal error in startScraping: ${error.message}`);
     res.status(500).send({ error: error.message, executionLogs });
+  }
+});
+
+/**
+ * Cloud Function Entry Point - Pub/Sub Trigger to process individual URL
+ */
+functions.cloudEvent('processUrlTask', async (cloudEvent) => {
+  const base64name = cloudEvent.data.message.data;
+  const messageStr = Buffer.from(base64name, 'base64').toString('utf-8');
+  const messageData = JSON.parse(messageStr);
+
+  const { url, jobId } = messageData;
+  const apiKey = process.env.GEMINI_API_KEY;
+  let executionLogs = [];
+
+  console.log(`[processUrlTask] Processing URL: ${url} for Job ID: ${jobId}`);
+
+  try {
+    const text = await fetchAndExtractText(url, executionLogs);
+    const campaigns = await extractCampaignData(text, apiKey, executionLogs);
+
+    if (campaigns && campaigns.length > 0) {
+      await saveCampaignsToFirestore(campaigns);
+    }
+  } catch (error) {
+    console.error(`[processUrlTask] Error processing url ${url}:`, error);
+  } finally {
+    // Always increment the completedUrls count whether success or failure
+    if (jobId) {
+      try {
+        const db = admin.firestore();
+        await db.collection('scraping_jobs').doc(jobId).update({
+          completedUrls: admin.firestore.FieldValue.increment(1)
+        });
+        console.log(`[processUrlTask] Incremented completedUrls for Job ID: ${jobId}`);
+      } catch (dbError) {
+        console.error(`[processUrlTask] Failed to update job progress for Job ID: ${jobId}:`, dbError);
+      }
+    }
   }
 });
 

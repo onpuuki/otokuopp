@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'url_manager_dialog.dart';
 import 'debug_log_screen.dart';
 import '../utils/debug_log_manager.dart';
+import 'scraping_status_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final FirebaseFirestore? firestore;
@@ -21,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLocationFilterEnabled = false;
   final GeoHasher _geoHasher = GeoHasher();
 
-  static const String scraperUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/scrapeCampaign';
+  static const String scraperUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/startScraping';
 
   Future<void> _triggerScraping() async {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -43,11 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
       DebugLogManager.addLog('Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final count = data['count'] ?? 0;
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scraping completed! Found $count campaigns.')),
+          const SnackBar(content: Text('バックグラウンドでスクレイピングを開始しました')),
         );
       } else {
         if (!mounted) return;
@@ -153,6 +152,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     );
                   },
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.analytics),
+              title: const Text('スクレイピング状況'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ScrapingStatusScreen(firestore: widget.firestore)),
                 );
               },
             ),
