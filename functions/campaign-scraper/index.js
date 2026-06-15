@@ -33,6 +33,17 @@ async function fetchAndExtractText(url, logs = []) {
     $('a').each((i, el) => {
       const href = $(el).attr('href');
       if (href) {
+        // Skip links that are purely javascript or anchor links
+        if (href.startsWith('javascript:') || href.startsWith('#')) {
+          return;
+        }
+
+        // Skip links with very short text (likely navigation buttons, noise)
+        const linkText = $(el).text().trim();
+        if (linkText.length < 5) {
+          return;
+        }
+
         try {
           const absoluteUrl = new URL(href, url).href;
           $(el).append(` [URL: ${absoluteUrl}] `);
@@ -66,10 +77,13 @@ async function extractCampaignData(text, apiKey, scrapingPolicy, logs = []) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+  const instructionPrefix = scrapingPolicy && scrapingPolicy.trim() !== ''
+    ? `以下の調査方針に厳密に従って抽出を行い、方針に合致しない情報は除外してください。\n【調査方針】: ${scrapingPolicy}`
+    : `ウェブサイトからすべてのお得なキャンペーン、セール、割引情報などを抽出してください（ただし単なる新店舗オープン情報などの通常情報は除外してください）。`;
+
   const prompt = `
 You are a helpful assistant that extracts campaign and sale information from unstructured text and structures it into JSON.
-以下の調査方針に厳密に従って抽出を行い、方針に合致しない情報（例: 単なる新店舗オープン情報など）は除外してください。
-【調査方針】: ${scrapingPolicy || '特になし'}
+${instructionPrefix}
 
 Please extract any campaigns, sales, or deals from the following text.
 Output MUST be valid JSON only. Do not wrap it in markdown block like \`\`\`json.
