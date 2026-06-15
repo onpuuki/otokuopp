@@ -195,6 +195,19 @@ functions.http('startScraping', async (req, res) => {
 
   try {
     const db = admin.firestore();
+
+    // Clear old campaigns before starting a new job
+    const campaignsSnapshot = await db.collection('campaigns').get();
+    if (!campaignsSnapshot.empty) {
+      const batch = db.batch();
+      campaignsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+    }
+    executionLogs.push(`Deleted ${campaignsSnapshot.size} old campaigns.`);
+    console.log(`Deleted ${campaignsSnapshot.size} old campaigns.`);
+
     const jobRef = await db.collection('scraping_jobs').add({
       totalUrls: urls.length,
       completedUrls: 0,
