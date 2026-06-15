@@ -29,6 +29,19 @@ async function fetchAndExtractText(url, logs = []) {
     // Remove scripts, styles to clean up
     $('script, style, noscript').remove();
 
+    // Process <a> tags to embed absolute URLs
+    $('a').each((i, el) => {
+      const href = $(el).attr('href');
+      if (href) {
+        try {
+          const absoluteUrl = new URL(href, url).href;
+          $(el).append(` [URL: ${absoluteUrl}] `);
+        } catch (e) {
+          // Ignore invalid URLs
+        }
+      }
+    });
+
     // Extract text
     const text = $('body').text().replace(/\s+/g, ' ').trim();
     console.log(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
@@ -45,7 +58,7 @@ async function fetchAndExtractText(url, logs = []) {
  * 2. Gemini API連携: 抽出したテキストをGemini API（gemini-2.5-flash）に渡し、
  * Phase 1で作成した `mock-data.json` のスキーマに完全に一致するJSON構造化データとして出力させる関数。
  */
-async function extractCampaignData(text, apiKey, logs = []) {
+async function extractCampaignData(text, apiKey, scrapingPolicy, logs = []) {
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is missing.');
   }
@@ -55,6 +68,9 @@ async function extractCampaignData(text, apiKey, logs = []) {
 
   const prompt = `
 You are a helpful assistant that extracts campaign and sale information from unstructured text and structures it into JSON.
+以下の調査方針に厳密に従って抽出を行い、方針に合致しない情報（例: 単なる新店舗オープン情報など）は除外してください。
+【調査方針】: ${scrapingPolicy || '特になし'}
+
 Please extract any campaigns, sales, or deals from the following text.
 Output MUST be valid JSON only. Do not wrap it in markdown block like \`\`\`json.
 The output MUST strictly follow this JSON schema for the 'campaigns' array:
@@ -71,6 +87,7 @@ The output MUST strictly follow this JSON schema for the 'campaigns' array:
       },
       // Do NOT include geohash here, it will be added later
       "details": "対象のキャンペーンの種類を判別し、'details' フィールドは以下のルールに従って必ず箇条書き（・）の改行テキストとして出力すること。情報がサイトにない項目は『記載なし』とすること。\\n- ポイント獲得サイトの場合：・貯まるポイント名、・ポイント数 を箇条書き。\\n- 抽選サイトの場合：・当たるもの、・抽選条件、・抽選期間、・当選確率、・当選発表日、・応募条件 を箇条書き。\\n- 上記以外のキャンペーン情報の場合：・対象のサイトや店舗名、・キャンペーンの概要 を箇条書き。",
+      "url": "各キャンペーンの個別詳細ページへの絶対URL（テキスト内に埋め込まれた [URL: ...] を使用すること）。",
       "expiresAt": "Expiration date in ISO 8601 format (e.g., '2024-12-31T23:59:59Z'). Try to guess from text, if not set to a future date."
     }
   ]
@@ -143,11 +160,13 @@ async function saveCampaignsToFirestore(campaigns) {
  */
 functions.http('startScraping', async (req, res) => {
   let executionLogs = [];
+  let scrapingPolicy = '';
   try {
     const isManual = req.body && req.body.isManual === true;
-    if (!isManual) {
-      const configDoc = await admin.firestore().collection('settings').doc('config').get();
-      if (configDoc.exists) {
+    const configDoc = await admin.firestore().collection('settings').doc('config').get();
+    if (configDoc.exists) {
+      scrapingPolicy = configDoc.data().scrapingPolicy || '';
+      if (!isManual) {
         const isAutoScrapingEnabled = configDoc.data().isAutoScrapingEnabled;
         if (isAutoScrapingEnabled === false) {
           console.log("Auto-scraping is disabled.");
@@ -157,8 +176,8 @@ functions.http('startScraping', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("Error reading auto-scraping config:", error);
-    executionLogs.push(`Error reading auto-scraping config: ${error.message}`);
+    console.error("Error reading config:", error);
+    executionLogs.push(`Error reading config: ${error.message}`);
   }
 
   let urls = req.body.urls;
@@ -219,7 +238,7 @@ functions.http('startScraping', async (req, res) => {
     const topic = pubSubClient.topic('scrape-url-topic');
 
     for (const url of urls) {
-      const messageBuffer = Buffer.from(JSON.stringify({ url, jobId }));
+      const messageBuffer = Buffer.from(JSON.stringify({ url, jobId, scrapingPolicy }));
       await topic.publishMessage({ data: messageBuffer });
     }
 
@@ -245,7 +264,7 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
   const messageStr = Buffer.from(base64name, 'base64').toString('utf-8');
   const messageData = JSON.parse(messageStr);
 
-  const { url, jobId } = messageData;
+  const { url, jobId, scrapingPolicy } = messageData;
   const apiKey = process.env.GEMINI_API_KEY;
   let executionLogs = [];
 
@@ -253,10 +272,12 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
 
   try {
     const text = await fetchAndExtractText(url, executionLogs);
-    const campaigns = await extractCampaignData(text, apiKey, executionLogs);
+    const campaigns = await extractCampaignData(text, apiKey, scrapingPolicy, executionLogs);
 
     if (campaigns && campaigns.length > 0) {
-      campaigns.forEach(c => c.url = url);
+      campaigns.forEach(c => {
+        if (!c.url) c.url = url;
+      });
       await saveCampaignsToFirestore(campaigns);
     }
   } catch (error) {
