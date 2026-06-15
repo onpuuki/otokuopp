@@ -248,14 +248,35 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
   } catch (error) {
     console.error(`[processUrlTask] Error processing url ${url}:`, error);
   } finally {
-    // Always increment the completedUrls count whether success or failure
+    // Always increment the completedUrls count whether success or failure, and check completion
     if (jobId) {
       try {
         const db = admin.firestore();
-        await db.collection('scraping_jobs').doc(jobId).update({
-          completedUrls: admin.firestore.FieldValue.increment(1)
+        const jobRef = db.collection('scraping_jobs').doc(jobId);
+
+        await db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(jobRef);
+          if (!doc.exists) {
+            throw new Error('Job document does not exist!');
+          }
+
+          const currentCompleted = doc.data().completedUrls || 0;
+          const totalUrls = doc.data().totalUrls || 0;
+          const newCompleted = currentCompleted + 1;
+
+          if (newCompleted >= totalUrls) {
+            transaction.update(jobRef, {
+              completedUrls: newCompleted,
+              status: 'completed'
+            });
+            console.log(`[processUrlTask] Job ID: ${jobId} status updated to completed. (${newCompleted}/${totalUrls})`);
+          } else {
+            transaction.update(jobRef, {
+              completedUrls: newCompleted
+            });
+            console.log(`[processUrlTask] Incremented completedUrls for Job ID: ${jobId}. (${newCompleted}/${totalUrls})`);
+          }
         });
-        console.log(`[processUrlTask] Incremented completedUrls for Job ID: ${jobId}`);
       } catch (dbError) {
         console.error(`[processUrlTask] Failed to update job progress for Job ID: ${jobId}:`, dbError);
       }
