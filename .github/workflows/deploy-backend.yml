@@ -36,4 +36,5 @@ jobs:
             --entry-point scrapeCampaign \
             --trigger-http \
             --allow-unauthenticated \
+            --timeout=120 \
             --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
