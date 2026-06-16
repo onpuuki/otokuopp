@@ -14,7 +14,8 @@ void main() {
     await tester.pump(); // wait for streams
 
     expect(find.text('Campaigns'), findsOneWidget);
-    expect(find.text('現在地周辺のみ表示'), findsOneWidget);
+    // '現在地周辺のみ表示' is now inside the bottom sheet, so let's verify the filter icon is present instead
+    expect(find.byIcon(Icons.filter_list), findsOneWidget);
   });
 
   testWidgets('HomeScreen opens UrlManagerDialog from drawer', (WidgetTester tester) async {
