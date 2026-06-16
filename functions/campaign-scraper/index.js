@@ -129,12 +129,36 @@ ${text}
     }
 
     const data = JSON.parse(jsonString);
-    logs.push(`[extractCampaignData] Successfully parsed JSON. Extracted ${(data.campaigns || []).length} campaigns.`);
-    return data.campaigns || [];
+
+    // Extract usage and calculate cost
+    let totalTokenCount = 0;
+    let estimatedCostYen = 0;
+    if (result.response && result.response.usageMetadata) {
+      const usage = result.response.usageMetadata;
+      totalTokenCount = usage.totalTokenCount || 0;
+      const promptTokenCount = usage.promptTokenCount || 0;
+      const candidatesTokenCount = usage.candidatesTokenCount || 0;
+
+      const inputCostUSD = (promptTokenCount / 1000000) * 0.075;
+      const outputCostUSD = (candidatesTokenCount / 1000000) * 0.30;
+      estimatedCostYen = (inputCostUSD + outputCostUSD) * 150;
+    }
+
+    logs.push(`[extractCampaignData] Successfully parsed JSON. Extracted ${(data.campaigns || []).length} campaigns. Tokens: ${totalTokenCount}, Cost: ${estimatedCostYen} yen.`);
+
+    return {
+      campaigns: data.campaigns || [],
+      tokenCount: totalTokenCount,
+      estimatedCostYen: estimatedCostYen
+    };
   } catch (error) {
     console.error('Error extracting campaign data from Gemini:', error);
     logs.push(`[extractCampaignData] Error: ${error.message}`);
-    throw error;
+    return {
+      campaigns: [],
+      tokenCount: 0,
+      estimatedCostYen: 0
+    };
   }
 }
 
@@ -282,13 +306,21 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
   const apiKey = process.env.GEMINI_API_KEY;
   let executionLogs = [];
 
+  let extractedCampaignsCount = 0;
+  let tokensUsed = 0;
+  let estimatedCostYen = 0;
+
   console.log(`[processUrlTask] Processing URL: ${url} for Job ID: ${jobId}`);
 
   try {
     const text = await fetchAndExtractText(url, executionLogs);
-    const campaigns = await extractCampaignData(text, apiKey, scrapingPolicy, executionLogs);
+    const extractionResult = await extractCampaignData(text, apiKey, scrapingPolicy, executionLogs);
+    const campaigns = extractionResult.campaigns || [];
+    tokensUsed = extractionResult.tokenCount || 0;
+    estimatedCostYen = extractionResult.estimatedCostYen || 0;
 
     if (campaigns && campaigns.length > 0) {
+      extractedCampaignsCount = campaigns.length;
       campaigns.forEach(c => {
         if (!c.url) c.url = url;
       });
@@ -313,16 +345,20 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
           const totalUrls = doc.data().totalUrls || 0;
           const newCompleted = currentCompleted + 1;
 
+          const updates = {
+            completedUrls: newCompleted,
+            totalExtractedCampaigns: admin.firestore.FieldValue.increment(extractedCampaignsCount),
+            totalTokensUsed: admin.firestore.FieldValue.increment(tokensUsed),
+            totalEstimatedCostYen: admin.firestore.FieldValue.increment(estimatedCostYen)
+          };
+
           if (newCompleted >= totalUrls) {
-            transaction.update(jobRef, {
-              completedUrls: newCompleted,
-              status: 'completed'
-            });
+            updates.status = 'completed';
+            updates.completedAt = admin.firestore.FieldValue.serverTimestamp();
+            transaction.update(jobRef, updates);
             console.log(`[processUrlTask] Job ID: ${jobId} status updated to completed. (${newCompleted}/${totalUrls})`);
           } else {
-            transaction.update(jobRef, {
-              completedUrls: newCompleted
-            });
+            transaction.update(jobRef, updates);
             console.log(`[processUrlTask] Incremented completedUrls for Job ID: ${jobId}. (${newCompleted}/${totalUrls})`);
           }
         });
