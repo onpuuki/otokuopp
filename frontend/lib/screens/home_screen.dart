@@ -20,6 +20,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLocationFilterEnabled = false;
+  String _searchKeyword = '';
+  Set<String> _selectedTypes = {};
+  Set<String> _selectedStores = {};
+  List<QueryDocumentSnapshot> _currentDocs = [];
   final GeoHasher _geoHasher = GeoHasher();
 
   static const String scraperUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/startScraping';
@@ -86,6 +90,119 @@ class _HomeScreenState extends State<HomeScreen> {
     return collection.snapshots();
   }
 
+  void _showFilterBottomSheet(BuildContext context, List<QueryDocumentSnapshot> allDocs) {
+    final storeNames = allDocs
+        .map((doc) => (doc.data() as Map<String, dynamic>)['storeName'] as String?)
+        .where((name) => name != null && name.isNotEmpty)
+        .cast<String>()
+        .toSet()
+        .toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('絞り込み', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('閉じる'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: TextEditingController(text: _searchKeyword),
+                      decoration: const InputDecoration(
+                        labelText: 'キーワード検索',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchKeyword = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('情報の種別', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Wrap(
+                      spacing: 8.0,
+                      children: ['キャンペーン', 'ポイント', '抽選'].map((type) {
+                        return FilterChip(
+                          label: Text(type),
+                          selected: _selectedTypes.contains(type),
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedTypes.add(type);
+                              } else {
+                                _selectedTypes.remove(type);
+                              }
+                            });
+                            setModalState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('店別', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Wrap(
+                      spacing: 8.0,
+                      children: storeNames.map((store) {
+                        return FilterChip(
+                          label: Text(store),
+                          selected: _selectedStores.contains(store),
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedStores.add(store);
+                              } else {
+                                _selectedStores.remove(store);
+                              }
+                            });
+                            setModalState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    SwitchListTile(
+                      title: const Text('現在地周辺のみ表示'),
+                      value: _isLocationFilterEnabled,
+                      onChanged: (value) {
+                        setState(() {
+                          _isLocationFilterEnabled = value;
+                        });
+                        setModalState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,20 +210,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Campaigns'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          Row(
-            children: [
-              const Text('現在地周辺のみ表示'),
-              Switch(
-                value: _isLocationFilterEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _isLocationFilterEnabled = value;
-                  });
-                },
-              ),
-            ],
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {
+              _showFilterBottomSheet(context, _currentDocs);
+            },
           ),
-          const SizedBox(width: 16),
         ],
       ),
       drawer: Drawer(
@@ -226,15 +335,53 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final data = snapshot.requireData;
+          _currentDocs = data.docs;
 
-          if (data.size == 0) {
+          final keyword = _searchKeyword.toLowerCase();
+          final filteredDocs = _currentDocs.where((doc) {
+            final campaign = doc.data()! as Map<String, dynamic>;
+            final title = campaign['title'] as String? ?? '';
+            final storeName = campaign['storeName'] as String? ?? '';
+            final details = campaign['details'] as String? ?? '';
+
+            if (keyword.isNotEmpty) {
+              if (!title.toLowerCase().contains(keyword) &&
+                  !storeName.toLowerCase().contains(keyword) &&
+                  !details.toLowerCase().contains(keyword)) {
+                return false;
+              }
+            }
+
+            if (_selectedTypes.isNotEmpty) {
+              bool typeMatch = false;
+              for (final type in _selectedTypes) {
+                if (title.contains(type) || details.contains(type)) {
+                  typeMatch = true;
+                  break;
+                }
+              }
+              if (!typeMatch) {
+                return false;
+              }
+            }
+
+            if (_selectedStores.isNotEmpty) {
+              if (!_selectedStores.contains(storeName)) {
+                return false;
+              }
+            }
+
+            return true;
+          }).toList();
+
+          if (filteredDocs.isEmpty) {
             return const Center(child: Text('No campaigns found.'));
           }
 
           return ListView.builder(
-            itemCount: data.size,
+            itemCount: filteredDocs.length,
             itemBuilder: (context, index) {
-              final document = data.docs[index];
+              final document = filteredDocs[index];
               final campaign = document.data()! as Map<String, dynamic>;
 
               final title = campaign['title'] as String? ?? 'No Title';
