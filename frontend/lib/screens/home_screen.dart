@@ -179,6 +179,32 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.only(bottom: 8.0),
                           child: Row(
                             children: [
+                              if (index > 0)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 8.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8.0, vertical: 4.0),
+                                  decoration: BoxDecoration(
+                                    color: condition.logicalOperator == 'AND'
+                                        ? Colors.blue.shade100
+                                        : Colors.green.shade100,
+                                    borderRadius: BorderRadius.circular(4.0),
+                                    border: Border.all(
+                                      color: condition.logicalOperator == 'AND'
+                                          ? Colors.blue
+                                          : Colors.green,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    condition.logicalOperator,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: condition.logicalOperator == 'AND'
+                                          ? Colors.blue.shade900
+                                          : Colors.green.shade900,
+                                    ),
+                                  ),
+                                ),
                               Expanded(
                                 child: TextField(
                                   decoration: InputDecoration(
