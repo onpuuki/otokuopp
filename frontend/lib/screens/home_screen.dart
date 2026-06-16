@@ -39,6 +39,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<FilterCondition> _filterConditions = [FilterCondition()];
   Set<String> _selectedTypes = {};
+  Set<String> _selectedStores = {};
   List<QueryDocumentSnapshot> _currentDocs = [];
 
   @override
@@ -51,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final conditionsString = prefs.getString('filterConditions');
     final typesString = prefs.getStringList('selectedTypes');
+    final storesString = prefs.getStringList('selectedStores');
 
     setState(() {
       if (conditionsString != null) {
@@ -64,6 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (typesString != null) {
         _selectedTypes = typesString.toSet();
       }
+      if (storesString != null) {
+        _selectedStores = storesString.toSet();
+      }
     });
   }
 
@@ -73,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
         jsonEncode(_filterConditions.map((e) => e.toJson()).toList());
     await prefs.setString('filterConditions', conditionsString);
     await prefs.setStringList('selectedTypes', _selectedTypes.toList());
+    await prefs.setStringList('selectedStores', _selectedStores.toList());
   }
 
   @override
@@ -135,6 +141,67 @@ class _HomeScreenState extends State<HomeScreen> {
     return (widget.firestore ?? FirebaseFirestore.instance)
         .collection('campaigns')
         .snapshots();
+  }
+
+  void _showStoreSelectionDialog(BuildContext context, Function setModalState) {
+    final uniqueStores = _currentDocs
+        .map((doc) =>
+            (doc.data() as Map<String, dynamic>)['storeName'] as String?)
+        .where((name) => name != null && name.trim().isNotEmpty)
+        .cast<String>()
+        .toSet()
+        .toList()
+      ..sort();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('店舗を選択'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.7,
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: uniqueStores.length,
+                    itemBuilder: (context, index) {
+                      final storeName = uniqueStores[index];
+                      return CheckboxListTile(
+                        title: Text(storeName),
+                        value: _selectedStores.contains(storeName),
+                        onChanged: (bool? value) {
+                          setDialogState(() {
+                            if (value == true) {
+                              _selectedStores.add(storeName);
+                            } else {
+                              _selectedStores.remove(storeName);
+                            }
+                          });
+                          setState(() {});
+                          setModalState(() {});
+                          _saveFilters();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('確定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showFilterBottomSheet(BuildContext context) {
@@ -289,6 +356,32 @@ class _HomeScreenState extends State<HomeScreen> {
                       }).toList(),
                     ),
                     const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _showStoreSelectionDialog(context, setModalState),
+                      icon: const Icon(Icons.store),
+                      label: const Text('店舗を選択'),
+                    ),
+                    if (_selectedStores.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Wrap(
+                          spacing: 8.0,
+                          children: _selectedStores.map((store) {
+                            return InputChip(
+                              label: Text(store),
+                              onDeleted: () {
+                                setState(() {
+                                  _selectedStores.remove(store);
+                                });
+                                setModalState(() {});
+                                _saveFilters();
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -318,6 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       setState(() {
                                         _filterConditions = [FilterCondition()];
                                         _selectedTypes.clear();
+                                        _selectedStores.clear();
                                       });
                                       setModalState(() {});
 
@@ -325,6 +419,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           await SharedPreferences.getInstance();
                                       await prefs.remove('filterConditions');
                                       await prefs.remove('selectedTypes');
+                                      await prefs.remove('selectedStores');
                                     },
                                     child: const Text('はい'),
                                   ),
@@ -531,6 +626,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               }
               if (!typeMatch) {
+                return false;
+              }
+            }
+
+            if (_selectedStores.isNotEmpty) {
+              if (!_selectedStores.contains(storeName)) {
                 return false;
               }
             }
