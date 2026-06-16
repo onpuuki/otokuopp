@@ -9,6 +9,7 @@ import 'debug_log_screen.dart';
 import '../utils/debug_log_manager.dart';
 import 'scraping_status_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class FilterCondition {
   String keyword;
@@ -566,6 +567,62 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+            StreamBuilder<DocumentSnapshot>(
+              stream: (widget.firestore ?? FirebaseFirestore.instance)
+                  .collection('settings')
+                  .doc('config')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                String amazonAffiliateId = '';
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>?;
+                  if (data != null && data.containsKey('amazonAffiliateId')) {
+                    amazonAffiliateId = data['amazonAffiliateId'] as String;
+                  }
+                }
+                return ListTile(
+                  leading: const Icon(Icons.monetization_on),
+                  title: const Text('紹介ID設定'),
+                  onTap: () {
+                    final TextEditingController controller =
+                        TextEditingController(text: amazonAffiliateId);
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext dialogContext) {
+                        return AlertDialog(
+                          title: const Text('Amazon紹介ID設定'),
+                          content: TextField(
+                            controller: controller,
+                            decoration: const InputDecoration(
+                              labelText: 'Amazon紹介ID (tag)',
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(dialogContext);
+                              },
+                              child: const Text('キャンセル'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                (widget.firestore ?? FirebaseFirestore.instance)
+                                    .collection('settings')
+                                    .doc('config')
+                                    .set({'amazonAffiliateId': controller.text},
+                                        SetOptions(merge: true));
+                                Navigator.pop(dialogContext);
+                              },
+                              child: const Text('保存'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -654,23 +711,58 @@ class _HomeScreenState extends State<HomeScreen> {
                   campaign['storeName'] as String? ?? 'No Store Name';
               final details = campaign['details'] as String? ?? 'No Details';
               final url = campaign['url'] as String? ?? 'https://google.com';
+              final isAffiliate = campaign['isAffiliate'] as bool? ?? false;
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => WebViewScreen(url: url),
-                      ),
-                    );
+                  onTap: () async {
+                    if (isAffiliate) {
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        // fallback to webview if launchUrl fails
+                        if (context.mounted) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WebViewScreen(url: url),
+                            ),
+                          );
+                        }
+                      }
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WebViewScreen(url: url),
+                        ),
+                      );
+                    }
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (isAffiliate)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amber,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              '#PR',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
                         Text(
                           title,
                           style: Theme.of(context).textTheme.titleLarge,

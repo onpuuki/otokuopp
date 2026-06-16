@@ -199,11 +199,13 @@ async function saveCampaignsToFirestore(campaigns) {
 functions.http('startScraping', async (req, res) => {
   let executionLogs = [];
   let scrapingPolicy = '';
+  let amazonAffiliateId = '';
   try {
     const isManual = req.body && req.body.isManual === true;
     const configDoc = await admin.firestore().collection('settings').doc('config').get();
     if (configDoc.exists) {
       scrapingPolicy = configDoc.data().scrapingPolicy || '';
+      amazonAffiliateId = configDoc.data().amazonAffiliateId || '';
       if (!isManual) {
         const isAutoScrapingEnabled = configDoc.data().isAutoScrapingEnabled;
         if (isAutoScrapingEnabled === false) {
@@ -276,7 +278,7 @@ functions.http('startScraping', async (req, res) => {
     const topic = pubSubClient.topic('scrape-url-topic');
 
     for (const url of urls) {
-      const messageBuffer = Buffer.from(JSON.stringify({ url, jobId, scrapingPolicy }));
+      const messageBuffer = Buffer.from(JSON.stringify({ url, jobId, scrapingPolicy, amazonAffiliateId }));
       await topic.publishMessage({ data: messageBuffer });
     }
 
@@ -302,7 +304,7 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
   const messageStr = Buffer.from(base64name, 'base64').toString('utf-8');
   const messageData = JSON.parse(messageStr);
 
-  const { url, jobId, scrapingPolicy } = messageData;
+  const { url, jobId, scrapingPolicy, amazonAffiliateId } = messageData;
   const apiKey = process.env.GEMINI_API_KEY;
   let executionLogs = [];
 
@@ -323,6 +325,19 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
       extractedCampaignsCount = campaigns.length;
       campaigns.forEach(c => {
         if (!c.url) c.url = url;
+
+        if (amazonAffiliateId && c.url.includes('amazon.co.jp')) {
+          try {
+            const urlObj = new URL(c.url);
+            urlObj.searchParams.set('tag', amazonAffiliateId);
+            c.url = urlObj.toString();
+            c.isAffiliate = true;
+          } catch (e) {
+            c.isAffiliate = false;
+          }
+        } else {
+          c.isAffiliate = false;
+        }
       });
       await saveCampaignsToFirestore(campaigns);
     }
