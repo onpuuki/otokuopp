@@ -14,7 +14,7 @@ void main() {
     await tester.pump(); // wait for streams
 
     expect(find.text('Campaigns'), findsOneWidget);
-    expect(find.text('現在地周辺のみ表示'), findsOneWidget);
+    expect(find.byIcon(Icons.filter_list), findsOneWidget);
   });
 
   testWidgets('HomeScreen opens UrlManagerDialog from drawer', (WidgetTester tester) async {

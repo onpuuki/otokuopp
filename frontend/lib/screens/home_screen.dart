@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/screens/webview_screen.dart';
-import 'package:dart_geohash/dart_geohash.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'url_manager_dialog.dart';
@@ -19,8 +18,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _isLocationFilterEnabled = false;
-  final GeoHasher _geoHasher = GeoHasher();
+  String _searchKeyword = '';
+  final Set<String> _selectedTypes = {};
+  List<QueryDocumentSnapshot> _currentDocs = [];
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
 
   static const String scraperUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/startScraping';
 
@@ -69,21 +77,83 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Test coordinates from requirements: latitude 35.6247, longitude 139.4244
-  // Note that GeoHasher.encode parameters are (longitude, latitude)
   Stream<QuerySnapshot> _getCampaignsStream() {
-    var collection = (widget.firestore ?? FirebaseFirestore.instance).collection('campaigns');
+    return (widget.firestore ?? FirebaseFirestore.instance).collection('campaigns').snapshots();
+  }
 
-    if (_isLocationFilterEnabled) {
-      // Encode coordinates with a precision of 5 (adjust length as needed)
-      String prefix = _geoHasher.encode(139.4244, 35.6247, precision: 5);
-      return collection
-          .where('geohash', isGreaterThanOrEqualTo: prefix)
-          .where('geohash', isLessThan: prefix + '\uf8ff')
-          .snapshots();
-    }
 
-    return collection.snapshots();
+  void _showFilterBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('絞り込み', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('閉じる'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        labelText: 'キーワード検索',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchKeyword = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('情報の種別', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Wrap(
+                      spacing: 8.0,
+                      children: ['キャンペーン', 'ポイント', '抽選'].map((type) {
+                        return FilterChip(
+                          label: Text(type),
+                          selected: _selectedTypes.contains(type),
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedTypes.add(type);
+                              } else {
+                                _selectedTypes.remove(type);
+                              }
+                            });
+                            setModalState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -93,20 +163,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Campaigns'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          Row(
-            children: [
-              const Text('現在地周辺のみ表示'),
-              Switch(
-                value: _isLocationFilterEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _isLocationFilterEnabled = value;
-                  });
-                },
-              ),
-            ],
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {
+              _showFilterBottomSheet(context);
+            },
           ),
-          const SizedBox(width: 16),
         ],
       ),
       drawer: Drawer(
@@ -226,15 +288,79 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final data = snapshot.requireData;
+          _currentDocs = data.docs;
 
-          if (data.size == 0) {
+          final keyword = _searchKeyword.toLowerCase().trim();
+
+          List<String> orBlocks = [];
+          if (keyword.isNotEmpty) {
+            // Replace full-width or with half-width, ignoring case handled by lowercase()
+            String normalizedKeyword = keyword.replaceAll(' or ', ' OR ').replaceAll('ｏｒ', ' OR ').replaceAll(' ＯＲ ', ' OR ');
+
+            orBlocks = normalizedKeyword.split(' OR ').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            if (orBlocks.isEmpty) {
+              orBlocks = [normalizedKeyword];
+            }
+          }
+
+          final filteredDocs = _currentDocs.where((doc) {
+            final campaign = doc.data()! as Map<String, dynamic>;
+            final title = campaign['title'] as String? ?? '';
+            final storeName = campaign['storeName'] as String? ?? '';
+            final details = campaign['details'] as String? ?? '';
+
+            final combinedText = '$title $storeName $details'.toLowerCase();
+
+            if (orBlocks.isNotEmpty) {
+              bool matchesOr = false;
+              for (String block in orBlocks) {
+                // Replace AND with spaces to treat them all as AND delimiters
+                String normalizedBlock = block.replaceAll(' and ', ' ').replaceAll('ａｎｄ', ' ').replaceAll('　', ' ');
+                List<String> andKeywords = normalizedBlock.split(' ').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
+                bool matchesAnd = true;
+                for (String andKw in andKeywords) {
+                  if (!combinedText.contains(andKw)) {
+                    matchesAnd = false;
+                    break;
+                  }
+                }
+
+                if (matchesAnd) {
+                  matchesOr = true;
+                  break;
+                }
+              }
+
+              if (!matchesOr) {
+                return false;
+              }
+            }
+
+            if (_selectedTypes.isNotEmpty) {
+              bool typeMatch = false;
+              for (final type in _selectedTypes) {
+                if (title.contains(type) || details.contains(type)) {
+                  typeMatch = true;
+                  break;
+                }
+              }
+              if (!typeMatch) {
+                return false;
+              }
+            }
+
+            return true;
+          }).toList();
+
+          if (filteredDocs.isEmpty) {
             return const Center(child: Text('No campaigns found.'));
           }
 
           return ListView.builder(
-            itemCount: data.size,
+            itemCount: filteredDocs.length,
             itemBuilder: (context, index) {
-              final document = data.docs[index];
+              final document = filteredDocs[index];
               final campaign = document.data()! as Map<String, dynamic>;
 
               final title = campaign['title'] as String? ?? 'No Title';
