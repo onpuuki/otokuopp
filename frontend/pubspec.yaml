@@ -15,6 +15,7 @@ dependencies:
   dart_geohash: ^2.1.0
   http: any
   intl: ^0.20.2
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   fake_cloud_firestore: ^2.4.3
