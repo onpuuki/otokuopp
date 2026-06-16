@@ -53,8 +53,21 @@ async function fetchAndExtractText(url, logs = []) {
       }
     });
 
-    // Extract text
-    const text = $('body').text().replace(/\s+/g, ' ').trim();
+    // Extract text with structural formatting
+    const blockElements = ['table', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'p', 'li', 'ul', 'ol'];
+    blockElements.forEach(tag => {
+      $(tag).prepend('\n');
+      $(tag).append('\n');
+    });
+    $('td, th').prepend(' ');
+    $('td, th').append(' ');
+    $('br').replaceWith('\n');
+
+    let text = $('body').text();
+    text = text.replace(/[ \t]+/g, ' '); // collapse horizontal whitespace
+    text = text.replace(/\n\s*\n+/g, '\n\n'); // collapse multiple vertical newlines
+    text = text.trim();
+
     console.log(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
     logs.push(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
     return text;
@@ -86,6 +99,7 @@ You are a helpful assistant that extracts campaign and sale information from uns
 ${instructionPrefix}
 
 Please extract any campaigns, sales, or deals from the following text.
+【重要】提供されるテキストは、Webページの表（テーブル構造）や箇条書き、動画・画像の配置によって、文章の並び順が一部前後したり、崩れたりしている可能性があります。単に特定のキーワードを探すだけでなく、テキスト全体の前後の文脈（特に『概要』『対象期間』『条件』『特典』といったセクションのつながり）を深く推論し、応募条件や抽選条件が少しでも記載されている場合は、決して『記載なし』とせず、必ずその内容を的確に紐解いて抽出してください。
 Output MUST be valid JSON only. Do not wrap it in markdown block like \`\`\`json.
 The output MUST strictly follow this JSON schema for the 'campaigns' array:
 
