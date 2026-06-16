@@ -8,6 +8,25 @@ import 'url_manager_dialog.dart';
 import 'debug_log_screen.dart';
 import '../utils/debug_log_manager.dart';
 import 'scraping_status_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class FilterCondition {
+  String keyword;
+  String logicalOperator; // 'AND' or 'OR'
+
+  FilterCondition({this.keyword = '', this.logicalOperator = 'AND'});
+
+  Map<String, dynamic> toJson() => {
+        'keyword': keyword,
+        'logicalOperator': logicalOperator,
+      };
+
+  factory FilterCondition.fromJson(Map<String, dynamic> json) =>
+      FilterCondition(
+        keyword: json['keyword'] as String? ?? '',
+        logicalOperator: json['logicalOperator'] as String? ?? 'AND',
+      );
+}
 
 class HomeScreen extends StatefulWidget {
   final FirebaseFirestore? firestore;
@@ -18,19 +37,51 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _searchKeyword = '';
-  final Set<String> _selectedTypes = {};
+  List<FilterCondition> _filterConditions = [FilterCondition()];
+  Set<String> _selectedTypes = {};
   List<QueryDocumentSnapshot> _currentDocs = [];
-  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFilters();
+  }
+
+  Future<void> _loadFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final conditionsString = prefs.getString('filterConditions');
+    final typesString = prefs.getStringList('selectedTypes');
+
+    setState(() {
+      if (conditionsString != null) {
+        final List<dynamic> decoded = jsonDecode(conditionsString);
+        _filterConditions =
+            decoded.map((e) => FilterCondition.fromJson(e)).toList();
+        if (_filterConditions.isEmpty) {
+          _filterConditions.add(FilterCondition());
+        }
+      }
+      if (typesString != null) {
+        _selectedTypes = typesString.toSet();
+      }
+    });
+  }
+
+  Future<void> _saveFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final conditionsString =
+        jsonEncode(_filterConditions.map((e) => e.toJson()).toList());
+    await prefs.setString('filterConditions', conditionsString);
+    await prefs.setStringList('selectedTypes', _selectedTypes.toList());
+  }
 
   @override
   void dispose() {
-    _searchController.dispose();
     super.dispose();
   }
 
-
-  static const String scraperUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/startScraping';
+  static const String scraperUrl =
+      'https://asia-northeast1-otokuapp.cloudfunctions.net/startScraping';
 
   Future<void> _triggerScraping() async {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -40,16 +91,19 @@ class _HomeScreenState extends State<HomeScreen> {
     DebugLogManager.addLog('Scraping started: sending request to $scraperUrl');
 
     try {
-      final response = await http.post(
-        Uri.parse(scraperUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'urls': [],
-          'isManual': true,
-        }), // Default empty array and manual flag
-      ).timeout(const Duration(seconds: 120));
+      final response = await http
+          .post(
+            Uri.parse(scraperUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'urls': [],
+              'isManual': true,
+            }), // Default empty array and manual flag
+          )
+          .timeout(const Duration(seconds: 120));
 
-      DebugLogManager.addLog('Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
+      DebugLogManager.addLog(
+          'Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
 
       if (response.statusCode == 200) {
         if (!mounted) return;
@@ -78,9 +132,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Stream<QuerySnapshot> _getCampaignsStream() {
-    return (widget.firestore ?? FirebaseFirestore.instance).collection('campaigns').snapshots();
+    return (widget.firestore ?? FirebaseFirestore.instance)
+        .collection('campaigns')
+        .snapshots();
   }
-
 
   void _showFilterBottomSheet(BuildContext context) {
     showModalBottomSheet(
@@ -104,7 +159,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('絞り込み', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const Text('絞り込み',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold)),
                         TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: const Text('閉じる'),
@@ -112,20 +169,79 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        labelText: 'キーワード検索',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchKeyword = value;
-                        });
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _filterConditions.length,
+                      itemBuilder: (context, index) {
+                        final condition = _filterConditions[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  decoration: InputDecoration(
+                                    labelText:
+                                        index == 0 ? 'キーワード検索' : '追加キーワード',
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                  controller: TextEditingController(
+                                      text: condition.keyword)
+                                    ..selection = TextSelection.collapsed(
+                                        offset: condition.keyword.length),
+                                  onChanged: (value) {
+                                    condition.keyword = value;
+                                    _saveFilters();
+                                    setState(() {});
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _filterConditions.insert(
+                                        index + 1,
+                                        FilterCondition(
+                                            logicalOperator: 'AND'));
+                                  });
+                                  _saveFilters();
+                                  setModalState(() {});
+                                },
+                                child: const Text('AND'),
+                              ),
+                              const SizedBox(width: 4),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _filterConditions.insert(index + 1,
+                                        FilterCondition(logicalOperator: 'OR'));
+                                  });
+                                  _saveFilters();
+                                  setModalState(() {});
+                                },
+                                child: const Text('OR'),
+                              ),
+                              if (index > 0)
+                                IconButton(
+                                  icon: const Icon(Icons.delete),
+                                  onPressed: () {
+                                    setState(() {
+                                      _filterConditions.removeAt(index);
+                                    });
+                                    _saveFilters();
+                                    setModalState(() {});
+                                  },
+                                ),
+                            ],
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(height: 16),
-                    const Text('情報の種別', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('情報の種別',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     Wrap(
                       spacing: 8.0,
                       children: ['キャンペーン', 'ポイント', '抽選'].map((type) {
@@ -140,10 +256,59 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _selectedTypes.remove(type);
                               }
                             });
+                            _saveFilters();
                             setModalState(() {});
                           },
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[100],
+                          foregroundColor: Colors.red,
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (BuildContext dialogContext) {
+                              return AlertDialog(
+                                title: const Text('確認'),
+                                content: const Text('本当にフィルタ設定をクリアしますか？'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(dialogContext);
+                                    },
+                                    child: const Text('キャンセル'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () async {
+                                      Navigator.pop(
+                                          dialogContext); // Close dialog
+
+                                      setState(() {
+                                        _filterConditions = [FilterCondition()];
+                                        _selectedTypes.clear();
+                                      });
+                                      setModalState(() {});
+
+                                      final prefs =
+                                          await SharedPreferences.getInstance();
+                                      await prefs.remove('filterConditions');
+                                      await prefs.remove('selectedTypes');
+                                    },
+                                    child: const Text('はい'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                        child: const Text('フィルタをクリア'),
+                      ),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -223,7 +388,9 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ScrapingStatusScreen(firestore: widget.firestore)),
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          ScrapingStatusScreen(firestore: widget.firestore)),
                 );
               },
             ),
@@ -233,7 +400,8 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const DebugLogScreen()),
+                  MaterialPageRoute(
+                      builder: (context) => const DebugLogScreen()),
                 );
               },
             ),
@@ -243,7 +411,8 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 showDialog(
                   context: context,
-                  builder: (context) => UrlManagerDialog(firestore: widget.firestore),
+                  builder: (context) =>
+                      UrlManagerDialog(firestore: widget.firestore),
                 );
               },
             ),
@@ -256,8 +425,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 bool isAutoScrapingEnabled = true; // default value
                 if (snapshot.hasData && snapshot.data!.exists) {
                   final data = snapshot.data!.data() as Map<String, dynamic>?;
-                  if (data != null && data.containsKey('isAutoScrapingEnabled')) {
-                    isAutoScrapingEnabled = data['isAutoScrapingEnabled'] as bool;
+                  if (data != null &&
+                      data.containsKey('isAutoScrapingEnabled')) {
+                    isAutoScrapingEnabled =
+                        data['isAutoScrapingEnabled'] as bool;
                   }
                 }
                 return SwitchListTile(
@@ -268,7 +439,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     (widget.firestore ?? FirebaseFirestore.instance)
                         .collection('settings')
                         .doc('config')
-                        .set({'isAutoScrapingEnabled': value}, SetOptions(merge: true));
+                        .set({'isAutoScrapingEnabled': value},
+                            SetOptions(merge: true));
                   },
                 );
               },
@@ -290,19 +462,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final data = snapshot.requireData;
           _currentDocs = data.docs;
 
-          final keyword = _searchKeyword.toLowerCase().trim();
-
-          List<String> orBlocks = [];
-          if (keyword.isNotEmpty) {
-            // Replace full-width or with half-width, ignoring case handled by lowercase()
-            String normalizedKeyword = keyword.replaceAll(' or ', ' OR ').replaceAll('ｏｒ', ' OR ').replaceAll(' ＯＲ ', ' OR ');
-
-            orBlocks = normalizedKeyword.split(' OR ').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-            if (orBlocks.isEmpty) {
-              orBlocks = [normalizedKeyword];
-            }
-          }
-
           final filteredDocs = _currentDocs.where((doc) {
             final campaign = doc.data()! as Map<String, dynamic>;
             final title = campaign['title'] as String? ?? '';
@@ -311,30 +470,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
             final combinedText = '$title $storeName $details'.toLowerCase();
 
-            if (orBlocks.isNotEmpty) {
-              bool matchesOr = false;
-              for (String block in orBlocks) {
-                // Replace AND with spaces to treat them all as AND delimiters
-                String normalizedBlock = block.replaceAll(' and ', ' ').replaceAll('ａｎｄ', ' ').replaceAll('　', ' ');
-                List<String> andKeywords = normalizedBlock.split(' ').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            bool currentResult = true;
+            bool isFirstValidCondition = true;
 
-                bool matchesAnd = true;
-                for (String andKw in andKeywords) {
-                  if (!combinedText.contains(andKw)) {
-                    matchesAnd = false;
-                    break;
-                  }
-                }
+            for (int i = 0; i < _filterConditions.length; i++) {
+              final condition = _filterConditions[i];
+              final kw = condition.keyword.toLowerCase().trim();
+              if (kw.isEmpty) continue;
 
-                if (matchesAnd) {
-                  matchesOr = true;
-                  break;
+              final contains = combinedText.contains(kw);
+
+              if (isFirstValidCondition) {
+                currentResult = contains;
+                isFirstValidCondition = false;
+              } else {
+                if (condition.logicalOperator == 'AND') {
+                  currentResult = currentResult && contains;
+                } else if (condition.logicalOperator == 'OR') {
+                  currentResult = currentResult || contains;
                 }
               }
+            }
 
-              if (!matchesOr) {
-                return false;
-              }
+            if (!currentResult && !isFirstValidCondition) {
+              return false;
             }
 
             if (_selectedTypes.isNotEmpty) {
@@ -364,7 +523,8 @@ class _HomeScreenState extends State<HomeScreen> {
               final campaign = document.data()! as Map<String, dynamic>;
 
               final title = campaign['title'] as String? ?? 'No Title';
-              final storeName = campaign['storeName'] as String? ?? 'No Store Name';
+              final storeName =
+                  campaign['storeName'] as String? ?? 'No Store Name';
               final details = campaign['details'] as String? ?? 'No Details';
               final url = campaign['url'] as String? ?? 'https://google.com';
 
@@ -391,9 +551,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 8),
                         Text(
                           storeName,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.grey[700],
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.grey[700],
+                                  ),
                         ),
                         const SizedBox(height: 12),
                         Text(
