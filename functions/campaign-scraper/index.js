@@ -213,13 +213,11 @@ async function saveCampaignsToFirestore(campaigns) {
 functions.http('startScraping', async (req, res) => {
   let executionLogs = [];
   let scrapingPolicy = '';
-  let amazonAffiliateId = '';
   try {
     const isManual = req.body && req.body.isManual === true;
     const configDoc = await admin.firestore().collection('settings').doc('config').get();
     if (configDoc.exists) {
       scrapingPolicy = configDoc.data().scrapingPolicy || '';
-      amazonAffiliateId = configDoc.data().amazonAffiliateId || '';
       if (!isManual) {
         const isAutoScrapingEnabled = configDoc.data().isAutoScrapingEnabled;
         if (isAutoScrapingEnabled === false) {
@@ -260,11 +258,19 @@ functions.http('startScraping', async (req, res) => {
     if (!urls || urls.length === 0) {
       console.log("Falling back to default dummy URLs.");
       urls = [
-        'https://example.com/campaigns',
-        'https://example.com/sales'
+        { url: 'https://example.com/campaigns' },
+        { url: 'https://example.com/sales' }
       ];
     }
   }
+
+  // Normalize URLs to objects
+  urls = urls.map(item => {
+    if (typeof item === 'string') {
+      return { url: item };
+    }
+    return item;
+  });
 
   try {
     const db = admin.firestore();
@@ -291,8 +297,17 @@ functions.http('startScraping', async (req, res) => {
     const jobId = jobRef.id;
     const topic = pubSubClient.topic('scrape-url-topic');
 
-    for (const url of urls) {
-      const messageBuffer = Buffer.from(JSON.stringify({ url, jobId, scrapingPolicy, amazonAffiliateId }));
+    for (const item of urls) {
+      const targetUrl = item.url;
+      const affiliatePlatform = item.affiliatePlatform || null;
+      const affiliateId = item.affiliateId || null;
+      const messageBuffer = Buffer.from(JSON.stringify({
+        url: targetUrl,
+        jobId,
+        scrapingPolicy,
+        affiliatePlatform,
+        affiliateId
+      }));
       await topic.publishMessage({ data: messageBuffer });
     }
 
@@ -318,7 +333,7 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
   const messageStr = Buffer.from(base64name, 'base64').toString('utf-8');
   const messageData = JSON.parse(messageStr);
 
-  const { url, jobId, scrapingPolicy, amazonAffiliateId } = messageData;
+  const { url, jobId, scrapingPolicy, affiliatePlatform, affiliateId } = messageData;
   const apiKey = process.env.GEMINI_API_KEY;
   let executionLogs = [];
 
@@ -340,10 +355,10 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
       campaigns.forEach(c => {
         if (!c.url) c.url = url;
 
-        if (amazonAffiliateId && c.url.includes('amazon.co.jp')) {
+        if (affiliatePlatform === 'amazon' && affiliateId) {
           try {
             const urlObj = new URL(c.url);
-            urlObj.searchParams.set('tag', amazonAffiliateId);
+            urlObj.searchParams.set('tag', affiliateId);
             c.url = urlObj.toString();
             c.isAffiliate = true;
           } catch (e) {
