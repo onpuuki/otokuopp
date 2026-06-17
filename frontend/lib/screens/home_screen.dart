@@ -656,14 +656,17 @@ class _HomeScreenState extends State<HomeScreen> {
               final details = campaign['details'] as String? ?? 'No Details';
               final url = campaign['url'] as String? ?? 'https://google.com';
               final isAffiliate = campaign['isAffiliate'] as bool? ?? false;
-              final mainTag = campaign['mainTag'] as String? ?? '';
+
+              final String mainTagStr = (document.data() as Map<String, dynamic>).containsKey('mainTag')
+                  ? (document['mainTag'] ?? '').toString()
+                  : '';
 
               Color? cardColor;
-              if (mainTag.contains('キャンペーン')) {
+              if (mainTagStr.contains('キャンペーン')) {
                 cardColor = Colors.orange.shade50;
-              } else if (mainTag.contains('抽選')) {
+              } else if (mainTagStr.contains('抽選')) {
                 cardColor = Colors.blue.shade50;
-              } else if (mainTag.contains('ポイント')) {
+              } else if (mainTagStr.contains('ポイント')) {
                 cardColor = Colors.green.shade50;
               }
 
