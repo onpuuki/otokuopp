@@ -33,15 +33,19 @@ async function fetchOgImage(url) {
                    $('meta[name="twitter:image"]').attr('content') ||
                    $('img').first().attr('src');
 
-    if (imageUrl) {
-      try {
-        return new URL(imageUrl, url).href;
-      } catch (e) {
-        return imageUrl;
-      }
+    if (!imageUrl) {
+      return '';
     }
 
-    return '';
+    if (imageUrl.startsWith('data:')) {
+      return '';
+    }
+
+    try {
+      return new URL(imageUrl, url).href;
+    } catch (e) {
+      return '';
+    }
   } catch (error) {
     console.error(`Error fetching OG image for ${url}:`, error.message);
     return '';
