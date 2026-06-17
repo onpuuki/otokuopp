@@ -656,9 +656,19 @@ class _HomeScreenState extends State<HomeScreen> {
               final details = campaign['details'] as String? ?? 'No Details';
               final url = campaign['url'] as String? ?? 'https://google.com';
               final isAffiliate = campaign['isAffiliate'] as bool? ?? false;
-              final thumbnailUrl = campaign['thumbnailUrl'] as String? ?? '';
+              final mainTag = campaign['mainTag'] as String? ?? '';
+
+              Color? cardColor;
+              if (mainTag == 'キャンペーン') {
+                cardColor = Colors.orange.withValues(alpha: 0.1);
+              } else if (mainTag == '抽選') {
+                cardColor = Colors.blue.withValues(alpha: 0.1);
+              } else if (mainTag == 'ポイント') {
+                cardColor = Colors.green.withValues(alpha: 0.1);
+              }
 
               return Card(
+                color: cardColor,
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: InkWell(
                   onTap: () async {
@@ -688,74 +698,42 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: Row(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (isAffiliate)
-                                Container(
-                                  margin: const EdgeInsets.only(bottom: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    '#PR',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                              Text(
-                                title,
-                                style: Theme.of(context).textTheme.titleLarge,
+                        if (isAffiliate)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amber,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              '#PR',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                storeName,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          color: Colors.grey[700],
-                                        ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                details,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ],
+                            ),
                           ),
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        const SizedBox(width: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: thumbnailUrl.isNotEmpty
-                              ? Image.network(
-                                  thumbnailUrl,
-                                  width: 70,
-                                  height: 70,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: 70,
-                                      height: 70,
-                                      color: Colors.grey[200],
-                                      child: const Icon(Icons.image, color: Colors.grey),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  width: 70,
-                                  height: 70,
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.image, color: Colors.grey),
-                                ),
+                        const SizedBox(height: 8),
+                        Text(
+                          storeName,
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.grey[700],
+                                  ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          details,
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
                     ),
