@@ -49,6 +49,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadFilters();
   }
 
+  Color? _getCardColor(String tag) {
+    if (tag.contains('キャンペーン')) return Colors.orange.shade100;
+    if (tag.contains('抽選')) return Colors.blue.shade100;
+    if (tag.contains('ポイント')) return Colors.green.shade100;
+    return null;
+  }
+
   Future<void> _loadFilters() async {
     final prefs = await SharedPreferences.getInstance();
     final conditionsString = prefs.getString('filterConditions');
@@ -661,17 +668,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? (document['mainTag'] ?? '').toString()
                   : '';
 
-              Color? cardColor;
-              if (mainTagStr.contains('キャンペーン')) {
-                cardColor = Colors.orange.shade50;
-              } else if (mainTagStr.contains('抽選')) {
-                cardColor = Colors.blue.shade50;
-              } else if (mainTagStr.contains('ポイント')) {
-                cardColor = Colors.green.shade50;
-              }
+              debugPrint('Card Render: $mainTagStr -> ${_getCardColor(mainTagStr)}');
 
               return Card(
-                color: cardColor,
                 surfaceTintColor: Colors.transparent,
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: InkWell(
@@ -700,46 +699,56 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     }
                   },
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (isAffiliate)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.amber,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              '#PR',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          storeName,
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.grey[700],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      color: _getCardColor(mainTagStr),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (isAffiliate)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  '#PR',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
                                   ),
+                                ),
+                              ),
+                            Text(
+                              'Debug: [Tag: $mainTagStr] [Color: ${_getCardColor(mainTagStr)?.toARGB32()}]',
+                              style: const TextStyle(color: Colors.red, fontSize: 10),
+                            ),
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              storeName,
+                              style:
+                                  Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        color: Colors.grey[700],
+                                      ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              details,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          details,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
