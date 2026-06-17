@@ -116,6 +116,8 @@ The output MUST strictly follow this JSON schema for the 'campaigns' array:
       "id": "A unique string ID for the campaign (you can generate one if not present, e.g., 'campaign-001')",
       "title": "The title of the campaign or sale",
       "storeName": "The name of the store",
+      "mainTag": "情報の種別。必ず 'キャンペーン', 'ポイント', '抽選', 'その他' のいずれか1つを出力すること。",
+      "subTags": ["以下のリストから文脈に合致するものを最大3つまで配列で出力する（'全員もらえる', 'タップ・ログインのみ', '要エントリー', '先着順', '高還元', '高確率', '超高額'）。合致しない場合は空配列 [] を出力すること。"],
       "location": {
         "latitude": 35.6369, // Approximate latitude if not available, try to guess from store name or set to a default number.
         "longitude": 139.4463 // Approximate longitude
