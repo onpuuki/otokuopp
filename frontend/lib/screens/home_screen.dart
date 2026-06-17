@@ -659,16 +659,17 @@ class _HomeScreenState extends State<HomeScreen> {
               final mainTag = campaign['mainTag'] as String? ?? '';
 
               Color? cardColor;
-              if (mainTag == 'キャンペーン') {
-                cardColor = Colors.orange.withValues(alpha: 0.1);
-              } else if (mainTag == '抽選') {
-                cardColor = Colors.blue.withValues(alpha: 0.1);
-              } else if (mainTag == 'ポイント') {
-                cardColor = Colors.green.withValues(alpha: 0.1);
+              if (mainTag.contains('キャンペーン')) {
+                cardColor = Colors.orange.shade50;
+              } else if (mainTag.contains('抽選')) {
+                cardColor = Colors.blue.shade50;
+              } else if (mainTag.contains('ポイント')) {
+                cardColor = Colors.green.shade50;
               }
 
               return Card(
                 color: cardColor,
+                surfaceTintColor: Colors.transparent,
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: InkWell(
                   onTap: () async {
