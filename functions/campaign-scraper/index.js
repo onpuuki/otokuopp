@@ -30,9 +30,18 @@ async function fetchOgImage(url) {
     const $ = cheerio.load(html);
 
     let imageUrl = $('meta[property="og:image"]').attr('content') ||
-                   $('meta[name="twitter:image"]').attr('content');
+                   $('meta[name="twitter:image"]').attr('content') ||
+                   $('img').first().attr('src');
 
-    return imageUrl || '';
+    if (imageUrl) {
+      try {
+        return new URL(imageUrl, url).href;
+      } catch (e) {
+        return imageUrl;
+      }
+    }
+
+    return '';
   } catch (error) {
     console.error(`Error fetching OG image for ${url}:`, error.message);
     return '';
