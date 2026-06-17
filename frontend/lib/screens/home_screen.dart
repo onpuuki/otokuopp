@@ -656,6 +656,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final details = campaign['details'] as String? ?? 'No Details';
               final url = campaign['url'] as String? ?? 'https://google.com';
               final isAffiliate = campaign['isAffiliate'] as bool? ?? false;
+              final thumbnailUrl = campaign['thumbnailUrl'] as String? ?? '';
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -687,43 +688,70 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: Column(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (isAffiliate)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.amber,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              '#PR',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isAffiliate)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    '#PR',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                title,
+                                style: Theme.of(context).textTheme.titleLarge,
                               ),
+                              const SizedBox(height: 8),
+                              Text(
+                                storeName,
+                                style:
+                                    Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          color: Colors.grey[700],
+                                        ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                details,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (thumbnailUrl.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              thumbnailUrl,
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 70,
+                                  height: 70,
+                                  color: Colors.grey[300],
+                                  child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                                );
+                              },
                             ),
                           ),
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          storeName,
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.grey[700],
-                                  ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          details,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
+                        ],
                       ],
                     ),
                   ),

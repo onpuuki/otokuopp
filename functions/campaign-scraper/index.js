@@ -13,6 +13,26 @@ if (!admin.apps.length) {
 const pubSubClient = new PubSub();
 
 /**
+ * OGP画像の取得: 指定されたURLのHTMLをフェッチし、og:imageまたはtwitter:imageを抽出する
+ */
+async function fetchOgImage(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) return '';
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    let imageUrl = $('meta[property="og:image"]').attr('content') ||
+                   $('meta[name="twitter:image"]').attr('content');
+
+    return imageUrl || '';
+  } catch (error) {
+    console.error(`Error fetching OG image for ${url}:`, error.message);
+    return '';
+  }
+}
+
+/**
  * 1. Webページの取得: 任意のURLからHTMLを取得し、cheerio等の軽量ライブラリを用いてプレーンテキストを抽出する関数。
  */
 async function fetchAndExtractText(url, logs = []) {
@@ -352,7 +372,9 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
 
     if (campaigns && campaigns.length > 0) {
       extractedCampaignsCount = campaigns.length;
-      campaigns.forEach(c => {
+
+      // Fetch thumbnail URLs concurrently for all extracted campaigns
+      await Promise.all(campaigns.map(async (c) => {
         if (!c.url) c.url = url;
 
         if (affiliatePlatform === 'amazon' && affiliateId) {
@@ -367,7 +389,10 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
         } else {
           c.isAffiliate = false;
         }
-      });
+
+        c.thumbnailUrl = await fetchOgImage(c.url);
+      }));
+
       await saveCampaignsToFirestore(campaigns);
     }
   } catch (error) {
