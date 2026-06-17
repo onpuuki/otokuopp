@@ -567,62 +567,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            StreamBuilder<DocumentSnapshot>(
-              stream: (widget.firestore ?? FirebaseFirestore.instance)
-                  .collection('settings')
-                  .doc('config')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                String amazonAffiliateId = '';
-                if (snapshot.hasData && snapshot.data!.exists) {
-                  final data = snapshot.data!.data() as Map<String, dynamic>?;
-                  if (data != null && data.containsKey('amazonAffiliateId')) {
-                    amazonAffiliateId = data['amazonAffiliateId'] as String;
-                  }
-                }
-                return ListTile(
-                  leading: const Icon(Icons.monetization_on),
-                  title: const Text('紹介ID設定'),
-                  onTap: () {
-                    final TextEditingController controller =
-                        TextEditingController(text: amazonAffiliateId);
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext dialogContext) {
-                        return AlertDialog(
-                          title: const Text('Amazon紹介ID設定'),
-                          content: TextField(
-                            controller: controller,
-                            decoration: const InputDecoration(
-                              labelText: 'Amazon紹介ID (tag)',
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pop(dialogContext);
-                              },
-                              child: const Text('キャンセル'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                (widget.firestore ?? FirebaseFirestore.instance)
-                                    .collection('settings')
-                                    .doc('config')
-                                    .set({'amazonAffiliateId': controller.text},
-                                        SetOptions(merge: true));
-                                Navigator.pop(dialogContext);
-                              },
-                              child: const Text('保存'),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
           ],
         ),
       ),

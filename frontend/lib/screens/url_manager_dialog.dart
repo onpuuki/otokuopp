@@ -36,22 +36,108 @@ class _UrlManagerDialogState extends State<UrlManagerDialog> {
 
   void _addUrl(List<dynamic> currentUrls) {
     final newUrl = _urlController.text.trim();
-    if (newUrl.isNotEmpty && !currentUrls.contains(newUrl)) {
-      final updatedUrls = List<String>.from(currentUrls.map((e) => e.toString()))..add(newUrl);
-      (widget.firestore ?? FirebaseFirestore.instance)
-          .collection('settings')
-          .doc('config')
-          .set({'targetUrls': updatedUrls}, SetOptions(merge: true));
-      _urlController.clear();
+    if (newUrl.isNotEmpty) {
+      bool alreadyExists = currentUrls.any((e) {
+        if (e is Map) return e['url'] == newUrl;
+        return e.toString() == newUrl;
+      });
+      if (!alreadyExists) {
+        final updatedUrls = List<dynamic>.from(currentUrls)..add({
+          "url": newUrl,
+          "affiliatePlatform": null,
+          "affiliateId": null,
+        });
+        (widget.firestore ?? FirebaseFirestore.instance)
+            .collection('settings')
+            .doc('config')
+            .set({'targetUrls': updatedUrls}, SetOptions(merge: true));
+        _urlController.clear();
+      }
     }
   }
 
-  void _removeUrl(List<dynamic> currentUrls, String urlToRemove) {
-    final updatedUrls = List<String>.from(currentUrls.map((e) => e.toString()))..remove(urlToRemove);
+  void _removeUrl(List<dynamic> currentUrls, dynamic itemToRemove) {
+    final updatedUrls = List<dynamic>.from(currentUrls)..remove(itemToRemove);
     (widget.firestore ?? FirebaseFirestore.instance)
         .collection('settings')
         .doc('config')
         .set({'targetUrls': updatedUrls}, SetOptions(merge: true));
+  }
+
+  void _updateAffiliate(List<dynamic> currentUrls, dynamic oldItem, Map<String, dynamic> newItem) {
+    final updatedUrls = List<dynamic>.from(currentUrls);
+    final index = updatedUrls.indexOf(oldItem);
+    if (index != -1) {
+      updatedUrls[index] = newItem;
+      (widget.firestore ?? FirebaseFirestore.instance)
+          .collection('settings')
+          .doc('config')
+          .set({'targetUrls': updatedUrls}, SetOptions(merge: true));
+    }
+  }
+
+  void _showAffiliateDialog(BuildContext context, List<dynamic> currentUrls, dynamic oldItem, String urlString) {
+    bool isAmazon = false;
+    String initialId = '';
+
+    if (oldItem is Map) {
+      isAmazon = oldItem['affiliatePlatform'] == 'amazon';
+      initialId = oldItem['affiliateId']?.toString() ?? '';
+    }
+
+    final TextEditingController idController = TextEditingController(text: initialId);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('アフィリエイトID設定'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CheckboxListTile(
+                    title: const Text('Amazon'),
+                    value: isAmazon,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        isAmazon = value ?? false;
+                      });
+                    },
+                  ),
+                  if (isAmazon)
+                    TextField(
+                      controller: idController,
+                      decoration: const InputDecoration(
+                        labelText: '紹介ID (tag)',
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('キャンセル'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final newItem = {
+                      "url": urlString,
+                      "affiliatePlatform": isAmazon ? 'amazon' : null,
+                      "affiliateId": isAmazon ? idController.text.trim() : null,
+                    };
+                    _updateAffiliate(currentUrls, oldItem, newItem);
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _savePolicy() {
@@ -101,12 +187,28 @@ class _UrlManagerDialogState extends State<UrlManagerDialog> {
                     shrinkWrap: true,
                     itemCount: targetUrls.length,
                     itemBuilder: (context, index) {
-                      final url = targetUrls[index].toString();
+                      final item = targetUrls[index];
+                      String urlString = '';
+                      if (item is Map) {
+                        urlString = item['url']?.toString() ?? '';
+                      } else {
+                        urlString = item.toString();
+                      }
+
                       return ListTile(
-                        title: Text(url, style: const TextStyle(fontSize: 14)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _removeUrl(targetUrls, url),
+                        title: Text(urlString, style: const TextStyle(fontSize: 14)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.monetization_on, color: Colors.amber),
+                              onPressed: () => _showAffiliateDialog(context, targetUrls, item, urlString),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _removeUrl(targetUrls, item),
+                            ),
+                          ],
                         ),
                       );
                     },
