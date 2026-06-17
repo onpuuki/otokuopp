@@ -726,10 +726,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             Text(
-                              'Debug: [Tag: $mainTagStr] [Color: ${_getCardColor(mainTagStr)?.toARGB32()}]',
-                              style: const TextStyle(color: Colors.red, fontSize: 10),
-                            ),
-                            Text(
                               title,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
