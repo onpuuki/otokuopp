@@ -531,26 +531,36 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextButton.icon(
-                icon: const Icon(Icons.filter_list),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.filter_list, size: 18),
                 label: const Text('絞り込み'),
-                style: TextButton.styleFrom(
+                style: OutlinedButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  side: BorderSide(color: Theme.of(context).primaryColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 onPressed: () {
                   _showFilterBottomSheet(context);
                 },
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.sort),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.sort, size: 18),
                 label: const Text('並び替え'),
-                style: TextButton.styleFrom(
+                style: OutlinedButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  side: BorderSide(color: Theme.of(context).primaryColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 onPressed: () {
                   _showSortDialog(context);
                 },
               ),
+              const SizedBox(width: 8),
             ],
           ),
         ],
@@ -831,6 +841,41 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.storefront, size: 16, color: Colors.black54),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    storeName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            const Divider(height: 16, thickness: 1, color: Colors.black12),
+                            Text(
+                              details,
+                              style: const TextStyle(fontSize: 13, color: Colors.black87),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 12),
                             if (isAffiliate)
                               Container(
                                 margin: const EdgeInsets.only(bottom: 4),
@@ -848,23 +893,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-                            Text(
-                              title,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              storeName,
-                              style:
-                                  Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        color: Colors.grey[700],
-                                      ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              details,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
                           ],
                         ),
                       ),
