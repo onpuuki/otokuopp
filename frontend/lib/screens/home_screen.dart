@@ -11,6 +11,8 @@ import 'scraping_status_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+enum SortOption { none, tagAsc, tagDesc, storeAsc, storeDesc }
+
 class FilterCondition {
   String keyword;
   String logicalOperator; // 'AND' or 'OR'
@@ -42,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> _selectedTypes = {};
   Set<String> _selectedStores = {};
   List<QueryDocumentSnapshot> _currentDocs = [];
+  SortOption _currentSort = SortOption.none;
 
   @override
   void initState() {
@@ -96,6 +99,74 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const String scraperUrl =
       'https://asia-northeast1-otokuapp.cloudfunctions.net/startScraping';
+
+  void _showSortDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('並び替え'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<SortOption>(
+                title: const Text('お得情報種別(昇順)'),
+                value: SortOption.tagAsc,
+                groupValue: _currentSort,
+                onChanged: (SortOption? value) {
+                  if (value != null) {
+                    setState(() {
+                      _currentSort = value;
+                    });
+                    Navigator.pop(dialogContext);
+                  }
+                },
+              ),
+              RadioListTile<SortOption>(
+                title: const Text('お得情報種別(降順)'),
+                value: SortOption.tagDesc,
+                groupValue: _currentSort,
+                onChanged: (SortOption? value) {
+                  if (value != null) {
+                    setState(() {
+                      _currentSort = value;
+                    });
+                    Navigator.pop(dialogContext);
+                  }
+                },
+              ),
+              RadioListTile<SortOption>(
+                title: const Text('店舗別(昇順)'),
+                value: SortOption.storeAsc,
+                groupValue: _currentSort,
+                onChanged: (SortOption? value) {
+                  if (value != null) {
+                    setState(() {
+                      _currentSort = value;
+                    });
+                    Navigator.pop(dialogContext);
+                  }
+                },
+              ),
+              RadioListTile<SortOption>(
+                title: const Text('店舗別(降順)'),
+                value: SortOption.storeDesc,
+                groupValue: _currentSort,
+                onChanged: (SortOption? value) {
+                  if (value != null) {
+                    setState(() {
+                      _currentSort = value;
+                    });
+                    Navigator.pop(dialogContext);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _triggerScraping() async {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -457,11 +528,30 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Campaigns'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              _showFilterBottomSheet(context);
-            },
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.filter_list),
+                label: const Text('絞り込み'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                onPressed: () {
+                  _showFilterBottomSheet(context);
+                },
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.sort),
+                label: const Text('並び替え'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                onPressed: () {
+                  _showSortDialog(context);
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -646,6 +736,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
             return true;
           }).toList();
+
+          filteredDocs.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>? ?? {};
+            final bData = b.data() as Map<String, dynamic>? ?? {};
+
+            String getSafeString(Map<String, dynamic> data, String key) {
+              if (data.containsKey(key) && data[key] != null) {
+                return data[key].toString();
+              }
+              return '';
+            }
+
+            switch (_currentSort) {
+              case SortOption.tagAsc:
+                final aVal = getSafeString(aData, 'mainTag');
+                final bVal = getSafeString(bData, 'mainTag');
+                return aVal.compareTo(bVal);
+              case SortOption.tagDesc:
+                final aVal = getSafeString(aData, 'mainTag');
+                final bVal = getSafeString(bData, 'mainTag');
+                return bVal.compareTo(aVal);
+              case SortOption.storeAsc:
+                final aVal = getSafeString(aData, 'storeName');
+                final bVal = getSafeString(bData, 'storeName');
+                return aVal.compareTo(bVal);
+              case SortOption.storeDesc:
+                final aVal = getSafeString(aData, 'storeName');
+                final bVal = getSafeString(bData, 'storeName');
+                return bVal.compareTo(aVal);
+              case SortOption.none:
+                return 0;
+            }
+          });
 
           if (filteredDocs.isEmpty) {
             return const Center(child: Text('No campaigns found.'));
