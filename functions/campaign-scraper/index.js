@@ -196,10 +196,11 @@ async function saveCampaignsToFirestore(campaigns) {
   let savedCount = 0;
 
   for (const campaign of campaigns) {
-    // 差分更新のためのID生成 (URLのMD5ハッシュ値)
+    // 差分更新のためのID生成
     const targetUrl = campaign.url || '';
     if (!targetUrl) continue; // URLがない場合はスキップ
-    const docId = crypto.createHash('md5').update(targetUrl).digest('hex');
+    const hashStr = (campaign.url || '') + (campaign.title || '') + (campaign.storeName || '') + (campaign.mainTag || '');
+    const docId = crypto.createHash('md5').update(hashStr).digest('hex');
     campaign.id = docId;
 
     const docRef = db.collection('campaigns').doc(docId);
@@ -446,6 +447,53 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
         console.error(`[processUrlTask] Failed to update job progress for Job ID: ${jobId}:`, dbError);
       }
     }
+  }
+});
+
+/**
+ * Cloud Function Entry Point - HTTP Trigger to reset all scraping data
+ */
+functions.http('resetScraping', async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const campaignsRef = db.collection('campaigns');
+    const snapshot = await campaignsRef.get();
+
+    if (snapshot.empty) {
+      console.log('No campaigns found to delete.');
+      return res.status(200).send({ message: 'No campaigns found to delete.', deletedCount: 0 });
+    }
+
+    // Firestore batched deletes (limit to 500 per batch)
+    let batch = db.batch();
+    let batchCount = 0;
+    let totalDeleted = 0;
+
+    for (const doc of snapshot.docs) {
+      batch.delete(doc.ref);
+      batchCount++;
+      totalDeleted++;
+
+      if (batchCount === 500) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    console.log(`Successfully deleted ${totalDeleted} campaigns.`);
+    res.status(200).send({
+      message: 'Scraping data reset successfully',
+      deletedCount: totalDeleted
+    });
+
+  } catch (error) {
+    console.error('Error in resetScraping:', error);
+    res.status(500).send({ error: error.message });
   }
 });
 

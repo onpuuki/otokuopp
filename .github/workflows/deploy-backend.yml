@@ -43,6 +43,18 @@ jobs:
             --timeout=120 \
             --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
 
+      - name: Deploy Cloud Function (Reset HTTP Trigger)
+        run: |
+          gcloud functions deploy resetScraping \
+            --gen2 \
+            --runtime nodejs20 \
+            --region asia-northeast1 \
+            --source functions/campaign-scraper \
+            --entry-point resetScraping \
+            --trigger-http \
+            --allow-unauthenticated \
+            --timeout=120
+
       - name: Deploy Cloud Function (Pub/Sub Trigger)
         run: |
           gcloud functions deploy processUrlTask \
