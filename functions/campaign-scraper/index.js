@@ -14,13 +14,31 @@ if (!admin.apps.length) {
 const pubSubClient = new PubSub();
 
 /**
+ * Helper function to save detailed logs to Firestore debug_logs collection
+ */
+async function saveDebugLog(url, title, message) {
+  try {
+    const db = admin.firestore();
+    await db.collection('debug_logs').add({
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      url: url || 'unknown',
+      title: title || 'System Log',
+      message: message || ''
+    });
+  } catch (err) {
+    console.error('Failed to save debug log to Firestore:', err);
+  }
+}
+
+/**
  * 1. Webページの取得: 任意のURLからHTMLを取得し、cheerio等の軽量ライブラリを用いてプレーンテキストを抽出する関数。
  */
 async function fetchAndExtractText(url, logs = []) {
   try {
     logs.push(`[fetchAndExtractText] Fetching URL: ${url}`);
+    await saveDebugLog(url, 'Fetch Start', `Fetching URL: ${url}`);
     const response = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(20000),
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -28,8 +46,11 @@ async function fetchAndExtractText(url, logs = []) {
       }
     });
     logs.push(`[fetchAndExtractText] Response status: ${response.status}`);
+    await saveDebugLog(url, 'Fetch Response', `HTTP Status: ${response.status} ${response.statusText}`);
     if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+      const reason = `Failed to fetch URL: ${response.status} ${response.statusText}`;
+      await saveDebugLog(url, 'Fetch Error', reason);
+      throw new Error(reason);
     }
     const html = await response.text();
     const $ = cheerio.load(html);
@@ -78,10 +99,12 @@ async function fetchAndExtractText(url, logs = []) {
 
     console.log(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
     logs.push(`[fetchAndExtractText] Extracted ${text.length} characters from ${url}`);
+    await saveDebugLog(url, 'Extraction Complete', `Extracted ${text.length} characters`);
     return text;
   } catch (error) {
     console.error('Error fetching and extracting text:', error);
     logs.push(`[fetchAndExtractText] Error: ${error.message}`);
+    await saveDebugLog(url, 'Fetch Exception', `Error: ${error.message}\nStack: ${error.stack || ''}`);
     throw error;
   }
 }
@@ -138,9 +161,11 @@ ${text}
   try {
     console.log(`[extractCampaignData] Calling Gemini API...`);
     logs.push(`[extractCampaignData] Calling Gemini API...`);
+    await saveDebugLog('Gemini', 'API Call Start', 'Calling Gemini API...');
     const result = await model.generateContent(prompt);
     console.log(`[extractCampaignData] Gemini API call completed.`);
     logs.push(`[extractCampaignData] Gemini API call completed.`);
+    await saveDebugLog('Gemini', 'API Call Complete', 'Gemini API call completed.');
     const responseText = result.response.text();
     console.log(`[extractCampaignData] Raw Gemini response:`, responseText);
 
@@ -168,7 +193,14 @@ ${text}
       estimatedCostYen = (inputCostUSD + outputCostUSD) * 150;
     }
 
-    logs.push(`[extractCampaignData] Successfully parsed JSON. Extracted ${(data.campaigns || []).length} campaigns. Tokens: ${totalTokenCount}, Cost: ${estimatedCostYen} yen.`);
+    const campaignsCount = (data.campaigns || []).length;
+    logs.push(`[extractCampaignData] Successfully parsed JSON. Extracted ${campaignsCount} campaigns. Tokens: ${totalTokenCount}, Cost: ${estimatedCostYen} yen.`);
+
+    if (campaignsCount > 0) {
+      await saveDebugLog('Gemini', 'Extraction Success', `Extracted ${campaignsCount} campaigns.`);
+    } else {
+      await saveDebugLog('Gemini', 'Extraction Zero', `Geminiの抽出結果が0件でした（対象のキャンペーン情報が存在しないか、取得に失敗した可能性があります）。`);
+    }
 
     return {
       campaigns: data.campaigns || [],
@@ -178,6 +210,7 @@ ${text}
   } catch (error) {
     console.error('Error extracting campaign data from Gemini:', error);
     logs.push(`[extractCampaignData] Error: ${error.message}`);
+    await saveDebugLog('Gemini', 'Extraction Exception', `Error: ${error.message}\nStack: ${error.stack || ''}`);
     return {
       campaigns: [],
       tokenCount: 0,
@@ -417,6 +450,7 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
     }
   } catch (error) {
     console.error(`[processUrlTask] Error processing url ${url}:`, error);
+    await saveDebugLog(url, 'Process Task Exception', `Error: ${error.message}\nStack: ${error.stack || ''}`);
   } finally {
     // Always increment the completedUrls count whether success or failure, and check completion
     if (jobId) {
