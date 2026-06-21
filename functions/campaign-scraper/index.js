@@ -199,7 +199,7 @@ async function saveCampaignsToFirestore(campaigns) {
     // 差分更新のためのID生成
     const targetUrl = campaign.url || '';
     if (!targetUrl) continue; // URLがない場合はスキップ
-    const hashStr = (campaign.url || '') + (campaign.title || '') + (campaign.storeName || '') + (campaign.mainTag || '');
+    const hashStr = (campaign.url || '') + '_' + (campaign.title || '') + '_' + (campaign.storeName || '') + '_' + JSON.stringify(campaign);
     const docId = crypto.createHash('md5').update(hashStr).digest('hex');
     campaign.id = docId;
 
@@ -386,10 +386,18 @@ functions.cloudEvent('processUrlTask', async (cloudEvent) => {
 
     if (campaigns && campaigns.length > 0) {
       extractedCampaignsCount = campaigns.length;
+      const db = admin.firestore();
 
       // Process affiliate links for all extracted campaigns
       await Promise.all(campaigns.map(async (c) => {
         if (!c.url) c.url = url;
+
+        await db.collection('debug_logs').add({
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          url: c.url || 'unknown',
+          title: c.title || 'EMPTY',
+          message: `Tag: ${c.mainTag} / Store: ${c.storeName}`
+        });
 
         if (affiliatePlatform === 'amazon' && affiliateId) {
           try {

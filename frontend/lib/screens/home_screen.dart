@@ -8,6 +8,7 @@ import 'url_manager_dialog.dart';
 import 'debug_log_screen.dart';
 import '../utils/debug_log_manager.dart';
 import 'scraping_status_screen.dart';
+import 'scraping_log_modal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
@@ -633,6 +634,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     );
                   },
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('スクレイピングログ確認'),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => ScrapingLogModal(firestore: widget.firestore),
                 );
               },
             ),
