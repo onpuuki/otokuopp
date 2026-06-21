@@ -10,6 +10,7 @@ import '../utils/debug_log_manager.dart';
 import 'scraping_status_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 enum SortOption { none, tagAsc, tagDesc, storeAsc, storeDesc }
 
@@ -801,6 +802,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? (document['mainTag'] ?? '').toString()
                   : '';
 
+              String? publishedAtString;
+              if ((document.data() as Map<String, dynamic>).containsKey('publishedAt')) {
+                final dynamic publishedAtDynamic = document['publishedAt'];
+                if (publishedAtDynamic is Timestamp) {
+                  final DateTime dateTime = publishedAtDynamic.toDate();
+                  publishedAtString = '${DateFormat('yyyy/MM/dd').format(dateTime)}に掲載';
+                }
+              }
+
               debugPrint('Card Render: $mainTagStr -> ${_getCardColor(mainTagStr)}');
 
               return Card(
@@ -857,6 +867,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                if (publishedAtString != null) ...[
+                                  const Spacer(),
+                                  Text(
+                                    publishedAtString,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                             const SizedBox(height: 6),

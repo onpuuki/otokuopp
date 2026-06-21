@@ -4,6 +4,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
 const ngeohash = require('ngeohash');
 const { PubSub } = require('@google-cloud/pubsub');
+const crypto = require('crypto');
 
 // Initialize Firebase Admin (only once)
 if (!admin.apps.length) {
@@ -192,27 +193,46 @@ ${text}
 async function saveCampaignsToFirestore(campaigns) {
   const db = admin.firestore();
   const batch = db.batch();
+  let savedCount = 0;
 
   for (const campaign of campaigns) {
-    // Generate Geohash
-    if (campaign.location && campaign.location.latitude && campaign.location.longitude) {
-      campaign.geohash = ngeohash.encode(campaign.location.latitude, campaign.location.longitude);
-    } else {
-        // Fallback geohash if no location, though location should be provided
-        campaign.geohash = '';
-    }
+    // 差分更新のためのID生成 (URLのMD5ハッシュ値)
+    const targetUrl = campaign.url || '';
+    if (!targetUrl) continue; // URLがない場合はスキップ
+    const docId = crypto.createHash('md5').update(targetUrl).digest('hex');
+    campaign.id = docId;
 
-    // Save to Firestore
-    const docRef = db.collection('campaigns').doc(campaign.id);
-    batch.set(docRef, campaign);
+    const docRef = db.collection('campaigns').doc(docId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      // 新規の場合のみ保存処理を行う
+      // Generate Geohash
+      if (campaign.location && campaign.location.latitude && campaign.location.longitude) {
+        campaign.geohash = ngeohash.encode(campaign.location.latitude, campaign.location.longitude);
+      } else {
+          // Fallback geohash if no location, though location should be provided
+          campaign.geohash = '';
+      }
+
+      campaign.publishedAt = admin.firestore.FieldValue.serverTimestamp();
+
+      // Save to Firestore
+      batch.set(docRef, campaign);
+      savedCount++;
+    }
   }
 
-  try {
-    await batch.commit();
-    console.log(`Successfully saved ${campaigns.length} campaigns to Firestore.`);
-  } catch (error) {
-    console.error('Error saving campaigns to Firestore:', error);
-    throw error;
+  if (savedCount > 0) {
+    try {
+      await batch.commit();
+      console.log(`Successfully saved ${savedCount} new campaigns to Firestore.`);
+    } catch (error) {
+      console.error('Error saving campaigns to Firestore:', error);
+      throw error;
+    }
+  } else {
+    console.log(`No new campaigns to save.`);
   }
 }
 
@@ -284,17 +304,21 @@ functions.http('startScraping', async (req, res) => {
   try {
     const db = admin.firestore();
 
-    // Clear old campaigns before starting a new job
-    const campaignsSnapshot = await db.collection('campaigns').get();
-    if (!campaignsSnapshot.empty) {
+    // Clear expired campaigns before starting a new job
+    const nowIsoString = new Date().toISOString();
+    const expiredSnapshot = await db.collection('campaigns')
+      .where('expiresAt', '<', nowIsoString)
+      .get();
+
+    if (!expiredSnapshot.empty) {
       const batch = db.batch();
-      campaignsSnapshot.docs.forEach((doc) => {
+      expiredSnapshot.docs.forEach((doc) => {
         batch.delete(doc.ref);
       });
       await batch.commit();
     }
-    executionLogs.push(`Deleted ${campaignsSnapshot.size} old campaigns.`);
-    console.log(`Deleted ${campaignsSnapshot.size} old campaigns.`);
+    executionLogs.push(`Deleted ${expiredSnapshot.size} expired campaigns.`);
+    console.log(`Deleted ${expiredSnapshot.size} expired campaigns.`);
 
     const jobRef = await db.collection('scraping_jobs').add({
       totalUrls: urls.length,
