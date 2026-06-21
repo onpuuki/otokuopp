@@ -171,48 +171,72 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _triggerScraping() async {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Scraping started...')),
+      const SnackBar(content: Text('スクレイピングを開始しました（バックグラウンドで処理されます）')),
     );
 
     DebugLogManager.addLog('Scraping started: sending request to $scraperUrl');
 
     try {
+      // Fire-and-forget: do not wait for the response to prevent timeout/sleep interruptions
+      http.post(
+        Uri.parse(scraperUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'urls': [],
+          'isManual': true,
+        }), // Default empty array and manual flag
+      ).then((response) {
+        DebugLogManager.addLog(
+            'Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
+      }).catchError((e) {
+        DebugLogManager.addLog('Scraping background error: $e');
+      });
+    } catch (e) {
+      DebugLogManager.addLog('Scraping error: $e');
+    }
+  }
+
+  Future<void> _resetScraping() async {
+    const String resetUrl = 'https://asia-northeast1-otokuapp.cloudfunctions.net/resetScraping';
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('リセット処理中...')),
+    );
+
+    DebugLogManager.addLog('Reset Scraping started: sending request to $resetUrl');
+
+    try {
       final response = await http
           .post(
-            Uri.parse(scraperUrl),
+            Uri.parse(resetUrl),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'urls': [],
-              'isManual': true,
-            }), // Default empty array and manual flag
           )
           .timeout(const Duration(seconds: 120));
 
       DebugLogManager.addLog(
-          'Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
+          'Reset Response received: Status Code: ${response.statusCode}, Body: ${response.body}');
 
       if (response.statusCode == 200) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('バックグラウンドでスクレイピングを開始しました')),
+          const SnackBar(content: Text('リセットが完了しました')),
         );
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scraping failed: ${response.statusCode}')),
+          SnackBar(content: Text('リセット失敗: ${response.statusCode}')),
         );
       }
     } on TimeoutException catch (e) {
-      DebugLogManager.addLog('Scraping timeout: $e');
+      DebugLogManager.addLog('Reset timeout: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('通信がタイムアウトしました。もう一度お試しください。')),
       );
     } catch (e) {
-      DebugLogManager.addLog('Scraping error: $e');
+      DebugLogManager.addLog('Reset error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('エラー: $e')),
       );
     }
   }
@@ -605,6 +629,36 @@ class _HomeScreenState extends State<HomeScreen> {
                             _triggerScraping();
                           },
                           child: const Text('実行'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_forever),
+              title: const Text('スクレイピングリセット'),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext dialogContext) {
+                    return AlertDialog(
+                      title: const Text('確認'),
+                      content: const Text('現在のスクレイピング結果をすべて削除します。よろしいですか？'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext); // Cancel
+                          },
+                          child: const Text('キャンセル'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext); // Close dialog
+                            _resetScraping();
+                          },
+                          child: const Text('OK'),
                         ),
                       ],
                     );
